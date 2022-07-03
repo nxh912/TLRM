@@ -45,7 +45,7 @@ DATA_OUT_PATH = './data_out/'
 loss_alpha = 0.5
 
 #dataset = 'epcot' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
-dataset = 'Melbourne' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
+dataset = 'Edin' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
 
 
 def positional_encoding(dim, sentence_length, dtype=tf.float32):
@@ -411,19 +411,19 @@ def time_function(dfVisits, train_pois):
     train_queue = []
     train_time.extend([1])  # initially 100 second for first POI
     train_queue.extend([1])  # initially 100 second for first POI
-    dfVisit1 = dfVisits.sort_values('takenUnix', ascending=True).drop_duplicates('poiID').reset_index()
-    dfVisit2 = dfVisits.sort_values('takenUnix', ascending=False).drop_duplicates('poiID').reset_index()
-    dfVisit2 = dfVisit2.sort_values('takenUnix', ascending=True)
+    dfVisit1 = dfVisits.sort_values('dateTaken', ascending=True).drop_duplicates('poiID').reset_index()
+    dfVisit2 = dfVisits.sort_values('dateTaken', ascending=False).drop_duplicates('poiID').reset_index()
+    dfVisit2 = dfVisit2.sort_values('dateTaken', ascending=True)
     # print("dfVisits1 = ", dfVisit1)
     # print("dfVisits2 = ", dfVisit2)
     for i in range(1, len(train_pois)):
 
-        t = dfVisit1[dfVisit1.poiID == train_pois[i]].takenUnix.values[0] - dfVisit1[dfVisit1.poiID == train_pois[i-1]].takenUnix.values[0] + 1
-        hour = datetime.fromtimestamp(dfVisit1[dfVisit1.poiID == train_pois[i]].takenUnix.values[0]).hour
+        t = dfVisit1[dfVisit1.poiID == train_pois[i]].dateTaken.values[0] - dfVisit1[dfVisit1.poiID == train_pois[i-1]].dateTaken.values[0] + 1
+        hour = datetime.fromtimestamp(dfVisit1[dfVisit1.poiID == train_pois[i]].dateTaken.values[0]).hour
         if dataset in ['epcot', 'disland','MagicK','caliAdv','disHolly']:
             q = QTIME[(int(train_pois[i]),int(hour))]#
         else:
-            q  = dfVisit1[dfVisit1.poiID == train_pois[i]].takenUnix.values[0] - dfVisit2[dfVisit2.poiID == train_pois[i-1]].takenUnix.values[0]  + 1
+            q  = dfVisit1[dfVisit1.poiID == train_pois[i]].dateTaken.values[0] - dfVisit2[dfVisit2.poiID == train_pois[i-1]].dateTaken.values[0]  + 1
         #print("t = ", t , " q = ",q)
         train_queue += [q/60]
         train_time += [t/60]
@@ -438,8 +438,10 @@ def preprocess(dataset):
     min_poi = 3
     min_user = 3
 
-    dfVisits = pd.read_excel('DataExcelFormat/userVisits-' + dataset + '-allPOI.xlsx')
-    dfVisits = pd.read_csv('Data/userVisits-' + dataset + '-allPOI.csv')
+    # dfVisits = pd.read_excel('DataExcelFormat/userVisits-' + dataset + '-allPOI.xlsx')
+    ##  pd.read_csv(userVisits_file, sep=';', dtype={'photoID':int, 'userID':str, 'dateTaken':int, 'poiID':int, 'poiTheme':str, 'poiFreq':int, 'seqID':int} )
+    dfVisits = pd.read_csv("Data/userVisits-{}-allPOI.csv".format(dataset), sep=';')
+    #print( f"pd.read_csv('Data/userVisits-{dataset}-allPOI.csv")
 
     if dataset in ["epcot", "disland", "MagicK", "caliAdv", 'disHolly']:
         dfQueue = pd.read_excel('DataExcelFormat/queueTimes-'+dataset+'.xlsx')
@@ -448,13 +450,19 @@ def preprocess(dataset):
             QTIME[(poi_q,hour)] = t_q
         print("Q time = ", QTIME)
 
-    dfVisits = dfVisits[dfVisits.takenUnix > 0]
-    dfVisits['user_freq'] = dfVisits.groupby('nsid')['nsid'].transform('count')
-    dfVisits = dfVisits[dfVisits.user_freq >= min_user]
+    print(dfVisits)
+
+    #dfVisits = dfVisits[dfVisits.dateTaken > 0]
+    dfVisits = dfVisits[dfVisits['dateTaken'] > 0]
+
+    #dfVisits['user_freq'] = dfVisits.groupby('userID')['userID'].transform('count')
+    dfVisits['user_freq'] = dfVisits.groupby('userID')['userID'].transform('count')
+
+    #dfVisits = dfVisits[dfVisits.user_freq >= min_user]
     dfVisits['poi_freq'] = dfVisits.groupby('poiID')['poiID'].transform('count')
     dfVisits = dfVisits[dfVisits.poi_freq >= min_poi]
 
-    dfVisits = dfVisits[['nsid', 'poiID', 'takenUnix','seqID']]
+    dfVisits = dfVisits[['userID', 'poiID', 'dateTaken','seqID']]
     print("\n\nLINE 458: dfVisits:")
     print(dfVisits)
 
@@ -470,12 +478,12 @@ def preprocess(dataset):
     max_len = 0
     for seq in sequences:
         tempdfVisits = dfVisits[dfVisits.seqID == seq]
-        tempdfVisits = tempdfVisits.sort_values(['takenUnix'], ascending=[True])
+        tempdfVisits = tempdfVisits.sort_values(['dateTaken'], ascending=[True])
 
-        user = tempdfVisits.iloc[0].nsid
+        user = tempdfVisits.iloc[0].userID
         pois = [i[0] for i in groupby(tempdfVisits.poiID)] #.unique()
 
-        print("\n=====>\nLINE 472: preprocess => seqID:", seq)
+        #print("\n=====>\nLINE 472: preprocess => seqID:", seq)
         #print("LINE 472: user : ", user)
         #print("LINE 472: pois : ", pois)
         #print("LINE 472: visits : \n", tempdfVisits)
@@ -491,11 +499,11 @@ def preprocess(dataset):
             continue
 
         userid = len(USERID)
-        print(f" LINE 493: USERID[{user}] = {userid}"  )
+        #print(f" LINE 493: USERID[{user}] = {userid}"  )
         max_len = len(pois)-1 if max_len < len(pois)-1 else max_len
 
         time, queue = time_function(tempdfVisits, pois)
-        print("  LINE_498,  time_function( [{} x {}] , pois) => time:{}, queue:{}".format(tempdfVisits.shape[0],tempdfVisits.shape[1], str(time), str(queue)))
+        #print("  LINE_498,  time_function( [{} x {}] , pois) => time:{}, queue:{}".format(tempdfVisits.shape[0],tempdfVisits.shape[1], str(time), str(queue)))
         #print("time : ", time)
         #print("queue : ", queue)
         #print("TIME : ")
@@ -542,7 +550,7 @@ def preprocess(dataset):
     print("LINE_539... df: \n", df)
 
     #Save input sequence
-    df.to_csv('data_in/input_'+dataset+'_train_TLRM.csv', index=False)
+    df.to_csv('data_in/input_'+dataset+'_train_TLRM.csv', sep=';', index=False)
     # Travel time sequence normalization
     # Recent check has most important
 
@@ -555,7 +563,7 @@ def findCordinates_Category(dataset):
     cordinats ={}
     Category = {}
     #dfNodes = pd.read_excel('DataExcelFormat/POI-' + dataset + '.xlsx')
-    dfNodes = pd.read_csv('Data/POI-' + dataset + '.csv')
+    dfNodes = pd.read_csv("Data/POI-{}.csv".format(dataset), sep=';')
     for i in range(len(dfNodes)):
         poiID = 'POI_'+ str(dfNodes.iloc[i].poiID)
         lati = dfNodes.iloc[i].lat
@@ -601,7 +609,7 @@ def make_output_embedding(x):
 def load_data():
 
     path = 'data_in/input_'+dataset+'_train_TLRM.csv'
-    data_df = pd.read_csv(path, header=0)
+    data_df = pd.read_csv(path, header=0, sep=';')
 
     question, answer, user, time, queue, queue_target = list(data_df['Train']), list(data_df['Test']), list(data_df['U']), list(data_df['T']), list(data_df['Q']), list(data_df['Q_t'])
     random_seed = random.randint(10,100)
@@ -701,8 +709,10 @@ def load_vocabulary():
     if (os.path.exists(path)):
         # Through the judgment because data exists
         # Load data
-        data_df = pd.read_csv(path, encoding='utf-8')
+        print( "LINE_712: data_df = pd.read_csv('{}', encoding='utf-8', sep=';')".format(path))
+        data_df = pd.read_csv(path, encoding='utf-8', sep=';')
 
+        print(data_df)
         # Through the data frame of Pandas
         # Bring columns for questions and answers.
         question, answer = list(data_df['Train']), list(data_df['Test'])
@@ -912,6 +922,7 @@ def dec_output_processing(value, dictionary):
 # The value and key to be indexed are words
 # Take a dictionary whose value is an index.
 def dec_target_processing(value, dictionary):
+    print("  --> dec_target_processing(..)")
     # Holding index values
     # Array (cumulative)
     sequences_target_index = []
@@ -920,10 +931,12 @@ def dec_target_processing(value, dictionary):
         value = prepro_like_morphlized(value)
     # Blows line by line.
     for sequence in value:
+        #print("\n  line_933 sequence => ", sequence)
         # FILTERS = "([~.,!? \" ':;) (]) "
         # Using normalization, the filter contains
         # Replace values ​​with "".
         sequence = re.sub(CHANGE_FILTER, "", sequence)
+        print("  line_939 sequence => ", sequence)
         # Bring word by space unit in sentence
         # Enter the index, which is the value of the dictionary.
         # Put END at the end of decoding output.
@@ -950,6 +963,7 @@ def dec_target_processing(value, dictionary):
     return np.asarray(sequences_target_index)
 
 def rearrange(input, in_distance, in_time, in_queue, in_users,output, out_dist, out_t, out_queue, out_users, target, target_queue):
+    print("  --> rearrange(..)")
     features = {"input": input, "in_distance":in_distance, "in_time":in_time, "in_queue":in_queue, "in_users":in_users, "output": output, "out_t":out_t, "out_distance":out_dist, "out_queue":out_queue, "out_users": out_users}
     labels = {"target": target, "t_queue": target_queue}
     return features, labels
@@ -1072,9 +1086,13 @@ def findPopularityFromData(dataset):
 
     global POPULARITY
 
-    print( ("... LOADING xlsx file : 'DataExcelFormat/userVisits-{}-allPOI.xlsx'".format(dataset)) )
-    dfvisits1 = pd.read_csv('Data/userVisits-' + dataset + '-allPOI.csv')
-    dfvisits1.drop_duplicates(subset=['nsid', 'poiID', 'seqID'])
+    print( ("... LOADING csv file : 'Data/userVisits-{}-allPOI.csv'".format(dataset)) )
+    userVisits_file="Data/userVisits-{}-allPOI.csv".format(dataset)
+    dfvisits1 = pd.read_csv(userVisits_file, sep=';', dtype={'photoID':int, 'userID':str, 'dateTaken':int, 'poiID':int, 'poiTheme':str, 'poiFreq':int, 'seqID':int} )
+
+    #dfvisits1.drop_duplicates(subset=['userID', 'poiID', 'seqID'])
+    print(dfvisits1)
+    dfvisits1.drop_duplicates(subset=['poiID', 'seqID'])
 
     print("\ndfvisits1 :\n", list(dfvisits1))
     print("\ndfvisits1.poiID :\n", list(sorted(set(dfvisits1.poiID))))
@@ -1170,12 +1188,6 @@ if __name__ == '__main__':
     print("\n\n### preprocess( dataset: ", dataset)
     max_len = preprocess(dataset)
 
-    quit(0)
-
-
-
-
-
     DEFINES.max_sequence_length = max_len+1
 
     #dep.themepark_or_city()
@@ -1186,7 +1198,6 @@ if __name__ == '__main__':
     # print(" vocabulary_length = ", vocabulary_length)
     DEFINES.vocabulary_size = vocabulary_length
     print(f"\n  line_1130 DEFINES.vocabulary_size = {DEFINES} ")
-    quit(0)
     for i in range(1, DEFINES.vocabulary_size + 1):
         if 'POI_' + str(i) not in POPULARITY:
             POPULARITY['POI_' + str(i)] = 1
@@ -1197,11 +1208,12 @@ if __name__ == '__main__':
     (train_target_queue, eval_target_queue) = target_queue
 
     # This is the part of creating a training set encoding.
-    train_input_enc, train_input_dist,train_input_users, train_input_enc_length = enc_processing(train_input, train_user, char2idx, Cordinates)
+    train_input_enc, train_input_dist,train_input_users, train_input_enc_length = \
+        enc_processing(train_input, train_user, char2idx, Cordinates)
+    print("\nline_1208, train_input_enc, train_input_dist,train_input_users, train_input_enc_length = enc_processing(train_input, train_user, char2idx, Cordinates)")
 
     # print(train_input_enc)
     # print(train_input_dist)
-
 
     train_input_time = padding(train_time, DEFINES.max_sequence_length)
     train_input_queue = padding(train_queue, DEFINES.max_sequence_length)
@@ -1211,28 +1223,50 @@ if __name__ == '__main__':
 
 
     train_output_dec, train_output_dec_length = dec_output_processing(train_label, char2idx)
+
+    print("==>")
+    print("==> train_output_dist = make_output_embedding(train_input_dist)")
     train_output_dist = make_output_embedding(train_input_dist)
+    print("==>")
+    print("==> train_output_time = make_output_embedding(train_input_time)")
     train_output_time = make_output_embedding(train_input_time)
+    print("==>")
+    print("==> strain_output_time = make_output_embedding(train_input_time)")
     train_output_queue = make_output_embedding(train_input_queue)
+    print("==>")
+    print("==> train_output_queue = make_output_embedding(train_input_queue)")
     train_output_users = make_output_embedding(train_input_users)
+    print("==>")
+    print("==> train_output_users = make_output_embedding(train_input_users)")
 
 
-
+    print("====> train_target_dec = dec_target_processing(train_label, char2idx)")
     train_target_dec = dec_target_processing(train_label, char2idx)
 
-    print("Target = ", train_target_dec)
+    print("====> train_target_dec = ", train_target_dec)
 
     # This is the part of making evaluation set encoding.
+    print("======> enc_processing(eval_input,eval_user, char2idx,Cordinates)")
     eval_input_enc, eval_input_dist, eval_input_users, eval_input_enc_length = enc_processing(eval_input,eval_user, char2idx,Cordinates)
+
+    print("======> padding(eval_time,DEFINES.max_sequence_length)")
     eval_input_time = padding(eval_time,DEFINES.max_sequence_length)
+
+    print("======> padding(eval_input,eval_user, char2idx,Cordinates)")
     eval_input_queue = padding(eval_queue, DEFINES.max_sequence_length)
 
+    print("======> dec_output_processing(eval_label, char2idx))")
     eval_output_dec, eval_output_dec_length = dec_output_processing(eval_label, char2idx)
+    print("======> make_output_embedding(eval_input_dist)")
     eval_output_dist = make_output_embedding(eval_input_dist)
+    print("======> make_output_embedding(eval_input_time)")
     eval_output_time = make_output_embedding(eval_input_time)
+    print("======> make_output_embedding(eval_input_queue)")
     eval_output_queue = make_output_embedding(eval_input_queue)
 
+    print("======> make_output_embedding(eval_input_users)")
     eval_output_users = make_output_embedding(eval_input_users)
+    print("======> dec_target_processing(eval_label, char2idx)")
     eval_target_dec = dec_target_processing(eval_label, char2idx)
 
     # print("eval target dec = ", eval_target_dec)
@@ -1247,14 +1281,16 @@ if __name__ == '__main__':
     eval_input_queue = np.asarray([[y/ max_queue for y in x] for x in eval_input_queue])
     train_output_queue = np.asarray([[y / max_queue for y in x] for x in train_output_queue])
     eval_output_queue = np.asarray([[y / max_queue for y in x] for x in eval_output_queue])
-    print(train_target_queue)
+    print("\nline 1284  eval_target_queue ==> ", eval_target_queue)
     print(eval_target_queue)
     train_target_queue = np.asarray([y / max_queue for y in train_target_queue])
+    print("\nline 1288  train_target_queue ==> ", train_target_queue)
     eval_target_queue = np.asarray([y / max_queue for y in eval_target_queue])
+    print("\nline 1288  eval_target_queue ==> ", eval_target_queue)
 
     DEFINES.max_queue_time = max_queue
 
-
+    print("TRAINING...")
     for i in range(iteration_number):
     # Import training data and test data.
         # Clear the existing models
