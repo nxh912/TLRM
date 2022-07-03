@@ -483,14 +483,6 @@ def preprocess(dataset):
         user = tempdfVisits.iloc[0].userID
         pois = [i[0] for i in groupby(tempdfVisits.poiID)] #.unique()
 
-        #print("\n=====>\nLINE 472: preprocess => seqID:", seq)
-        #print("LINE 472: user : ", user)
-        #print("LINE 472: pois : ", pois)
-        #print("LINE 472: visits : \n", tempdfVisits)
-        #quit(0)
-        #print(tempdfVisits)
-
-
         #if len(pois) >= min_poi:
         if user not in USERID:
             #print(f"LINE 488: USERID[{user}] = {len(USERID)}"  )
@@ -503,12 +495,15 @@ def preprocess(dataset):
         max_len = len(pois)-1 if max_len < len(pois)-1 else max_len
 
         time, queue = time_function(tempdfVisits, pois)
-        #print("  LINE_498,  time_function( [{} x {}] , pois) => time:{}, queue:{}".format(tempdfVisits.shape[0],tempdfVisits.shape[1], str(time), str(queue)))
+
         #print("time : ", time)
         #print("queue : ", queue)
         #print("TIME : ")
         #quit(0)
-        print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
+        #print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
+
+        print("  LINE_498,  PROCESS USER_ID:{}, SEQ_ID:{} ( [{} ] , pois) => time:{}, queue:{}"
+            .format( user, seq, tempdfVisits.shape[0], str(time), str(queue)))
 
         userid = USERID[user]
 
