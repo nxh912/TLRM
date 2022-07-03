@@ -439,12 +439,15 @@ def preprocess(dataset):
     min_user = 3
 
     dfVisits = pd.read_excel('DataExcelFormat/userVisits-' + dataset + '-allPOI.xlsx')
+    dfVisits = pd.read_csv('Data/userVisits-' + dataset + '-allPOI.csv')
+
     if dataset in ["epcot", "disland", "MagicK", "caliAdv", 'disHolly']:
         dfQueue = pd.read_excel('DataExcelFormat/queueTimes-'+dataset+'.xlsx')
         for i in range(dfQueue.shape[0]):
             poi_q, hour, t_q, = int(dfQueue.iloc[i]['poiID']), int(dfQueue.iloc[i]['hour']),dfQueue.iloc[i]['avgQueueTime']
             QTIME[(poi_q,hour)] = t_q
-        # print("Q time = ", QTIME)
+        print("Q time = ", QTIME)
+
     dfVisits = dfVisits[dfVisits.takenUnix > 0]
     dfVisits['user_freq'] = dfVisits.groupby('nsid')['nsid'].transform('count')
     dfVisits = dfVisits[dfVisits.user_freq >= min_user]
@@ -452,30 +455,55 @@ def preprocess(dataset):
     dfVisits = dfVisits[dfVisits.poi_freq >= min_poi]
 
     dfVisits = dfVisits[['nsid', 'poiID', 'takenUnix','seqID']]
-    # print(dfVisits)
+    print("\n\nLINE 458: dfVisits:")
+    print(dfVisits)
+
+
     df = pd.DataFrame(columns=['Train', 'Test', 'U','T','Q','Q_t'])
-
-
 
     train_part = 0.7
     sequences = dfVisits.seqID.unique()
+    print("\n\nLINE 466: sequence = dfVisits.seqID.unique() : ", sequences)
+
+
     # print(sequences)
     max_len = 0
     for seq in sequences:
         tempdfVisits = dfVisits[dfVisits.seqID == seq]
         tempdfVisits = tempdfVisits.sort_values(['takenUnix'], ascending=[True])
+
         user = tempdfVisits.iloc[0].nsid
         pois = [i[0] for i in groupby(tempdfVisits.poiID)] #.unique()
+
+        print("\n=====>\nLINE 472: preprocess => seqID:", seq)
+        #print("LINE 472: user : ", user)
+        #print("LINE 472: pois : ", pois)
+        #print("LINE 472: visits : \n", tempdfVisits)
+        #quit(0)
+        #print(tempdfVisits)
+
+
         #if len(pois) >= min_poi:
         if user not in USERID:
+            #print(f"LINE 488: USERID[{user}] = {len(USERID)}"  )
             USERID[user] = len(USERID)
         if len(tempdfVisits) == 0:
             continue
 
+        userid = len(USERID)
+        print(f" LINE 493: USERID[{user}] = {userid}"  )
+        max_len = len(pois)-1 if max_len < len(pois)-1 else max_len
+
+        time, queue = time_function(tempdfVisits, pois)
+        print("  LINE_498,  time_function( [{} x {}] , pois) => time:{}, queue:{}".format(tempdfVisits.shape[0],tempdfVisits.shape[1], str(time), str(queue)))
+        #print("time : ", time)
+        #print("queue : ", queue)
+        #print("TIME : ")
+        #quit(0)
+        print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
+
         userid = USERID[user]
 
-        max_len = len(pois)-1 if max_len < len(pois)-1 else max_len
-        time, queue = time_function(tempdfVisits, pois)
         for i in range(len(pois) - 1):
 
             startW = 0 #max(i - 2 * window_size, 0)
@@ -493,7 +521,13 @@ def preprocess(dataset):
             df.at[df.shape[0]] = (train_d, test_d, userseq, train_time, train_queue, target_queue)
             # train_time.append(time)
 
+    print("\n\nLINE_524: PRE-PROCESS DONE")
 
+
+
+    #print("LINE_528... df: \n", df)
+
+    ## remove chars from df
     characters = ["'", ",", "[", "]"]
     for char in characters:
         df['Train'] = df['Train'].apply(str).str.replace(char, '')
@@ -503,6 +537,9 @@ def preprocess(dataset):
         df['Q'] = df['Q'].apply(str).str.replace(char, '')
         df['Q_t'] = df['Q_t'].apply(str).str.replace(char, '')
 
+    print("LINE_539... df: \n", df.columns)
+    ### 'Train', 'Test', 'U', 'T', 'Q', 'Q_t'
+    print("LINE_539... df: \n", df)
 
     #Save input sequence
     df.to_csv('data_in/input_'+dataset+'_train_TLRM.csv', index=False)
@@ -517,7 +554,8 @@ def preprocess(dataset):
 def findCordinates_Category(dataset):
     cordinats ={}
     Category = {}
-    dfNodes = pd.read_excel('DataExcelFormat/POI-' + dataset + '.xlsx')
+    #dfNodes = pd.read_excel('DataExcelFormat/POI-' + dataset + '.xlsx')
+    dfNodes = pd.read_csv('Data/POI-' + dataset + '.csv')
     for i in range(len(dfNodes)):
         poiID = 'POI_'+ str(dfNodes.iloc[i].poiID)
         lati = dfNodes.iloc[i].lat
@@ -984,7 +1022,7 @@ def eval_input_fn(eval_input, eval_out, eval_target_dec, eval_target_queue, batc
 
 
 """
-    Clear all existing build in files including folders and subfolders 
+    Clear all existing build in files including folders and subfolders
 """
 #**********************************************************************************************************************
 def clearExistingFile():
@@ -1016,9 +1054,12 @@ def largest_indices(array: np.ndarray, n: int) -> tuple:
 
     return np.asarray(np.unravel_index(indices, array.shape))[0], values[0:10]
 
-def to_frequency_table(data):
+def to_frequency_table(poiids):
+    print("LINE 1058: to_frequency_table( poiids )")
+    print("LINE 1059, poiids: ", list(sorted(poiids.unique()) ) )
     frequencytable = {}
-    for key in data:
+    for key in poiids:
+        # poiID: POI_???
         if 'POI_'+ str(key) in frequencytable:
             frequencytable['POI_'+str(key)] += 1
         else:
@@ -1031,12 +1072,16 @@ def findPopularityFromData(dataset):
 
     global POPULARITY
 
-    print( ("LOADING xlsx file : 'DataExcelFormat/userVisits-{}-allPOI.xlsx'".format(dataset)) )
-    dfvisits1 = pd.read_excel('DataExcelFormat/userVisits-' + dataset + '-allPOI.xlsx')
-
+    print( ("... LOADING xlsx file : 'DataExcelFormat/userVisits-{}-allPOI.xlsx'".format(dataset)) )
+    dfvisits1 = pd.read_csv('Data/userVisits-' + dataset + '-allPOI.csv')
     dfvisits1.drop_duplicates(subset=['nsid', 'poiID', 'seqID'])
 
+    print("\ndfvisits1 :\n", list(dfvisits1))
+    print("\ndfvisits1.poiID :\n", list(sorted(set(dfvisits1.poiID))))
+    print(dfvisits1)
     POPULARITY = to_frequency_table(dfvisits1.poiID)
+    print("\n---> to_frequency_table:")
+    print(POPULARITY)
 
 def evaluation_popularity(value,targets, idx2char, POPULARITY):
 
@@ -1103,18 +1148,31 @@ if __name__ == '__main__':
     data_out_path = os.path.join(os.getcwd(), DATA_OUT_PATH)
     os.makedirs(data_out_path, exist_ok=True)
 
+    print("\n\n### dataset : ", dataset)
+    print("### findPopularityFromData(   ", dataset)
     findPopularityFromData(dataset)
 
-    print("Popularity = ", POPULARITY)
-
+    #print(POPULARITY)
+    for key in sorted(POPULARITY.keys()) :
+        print(f"line_1157   POPULARITY[{key}] = {POPULARITY[key]}")
 
     # global Cordinates
 
+    print("### findCordinates_Category(   ", dataset)
     Cordinates, Category = findCordinates_Category(dataset)
+    for key in sorted(Cordinates.keys()) :
+        print(f"line_1164   Cordinates[{key}] = {Cordinates[key]}")
+    for key in sorted(Category.keys()) :
+        print(f"line_1166   Category[{key}] = {Category[key]}")
 
     #print("Cordinates = ", Cordinates)
 
+    print("\n\n### preprocess( dataset: ", dataset)
     max_len = preprocess(dataset)
+
+    quit(0)
+
+
 
 
 
@@ -1127,7 +1185,8 @@ if __name__ == '__main__':
     # print("idx2char = ", idx2char)
     # print(" vocabulary_length = ", vocabulary_length)
     DEFINES.vocabulary_size = vocabulary_length
-
+    print(f"\n  line_1130 DEFINES.vocabulary_size = {DEFINES} ")
+    quit(0)
     for i in range(1, DEFINES.vocabulary_size + 1):
         if 'POI_' + str(i) not in POPULARITY:
             POPULARITY['POI_' + str(i)] = 1
@@ -1234,7 +1293,7 @@ if __name__ == '__main__':
         eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),steps=1)
         print("eval_result : \n", eval_result)
 
-        
+
         #print('\nEVAL set precision_5:{precision_5:0.3f} recall_5:{recall_5:0.3f} precision_10:{precision_10:0.3f} recall_10:{recall_10:0.3f}  ndcg_5:{ndcg_5:0.3f}\n ndcg_10:{ndcg_10:0.3f}'.format(**eval_result))
 
         print("Iterations = ", i + 1)
@@ -1298,5 +1357,5 @@ if __name__ == '__main__':
     print("Average RMSE =  %f" % (total_rmse))
 
 
-    results.to_excel('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.xlsx')
-
+    #results.to_excel('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.xlsx')
+    results.to_csv('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.csv')
