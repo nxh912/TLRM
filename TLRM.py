@@ -212,18 +212,15 @@ def find_idcg():
 
 
 def evaluation_distance(value, targets, idx2char, cordinates):
-    print("\n\nLINE 215: evaluation_distance(...)")
+
 
     index = 0
     popularity_5 = 0
     popularity_10 = 0
     distance_5, distance_10 = 0, 0
 
-    print("\n\nLINE 222: value :   ", value)
-    print("\n\nLINE 223: targets : ", targets)
 
     for v in value:
-        print("\n\nLINE 2245: evaluation_distance(...)...  value=> ", v)
         pop_5, pop_10 = 0,0
         index2 = 0
 
@@ -505,7 +502,8 @@ def preprocess(dataset):
         #quit(0)
         #print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
 
-        ### print("  LINE_498,  PROCESS USER_ID:{}, SEQ_ID:{} ( [{} ] , pois) => time:{}, queue:{}".format( user, seq, tempdfVisits.shape[0], str(time), str(queue)))
+        print("  LINE_498,  PROCESS USER_ID:{}, SEQ_ID:{} ( [{} ] , pois) => time:{}, queue:{}"
+            .format( user, seq, tempdfVisits.shape[0], str(time), str(queue)))
 
         userid = USERID[user]
 
@@ -909,7 +907,7 @@ def dec_output_processing(value, dictionary):
     # Indexed value
         # Insert sequences_output_index.
         sequences_output_index.append(sequence_index)
-    #  Convert a regular indexed array to a NumPy array.
+    #  Convert a regular indexed array to a NumPy array.
     # The reason for putting it in the TensorFlow dataset
     # It is pre-work.
     # Pass the indexed array and its length to the NumPy array.
@@ -961,37 +959,25 @@ def dec_target_processing(value, dictionary):
 
 def rearrange(input, in_distance, in_time, in_queue, in_users,output, out_dist, out_t, out_queue, out_users, target, target_queue):
     #print("  --> rearrange(..)")
-
     features = {
-        "input":       input,
-        "in_distance": in_distance,
-        "in_time":     in_time,
-        "in_queue":    in_queue,
-        "in_users":    in_users,
-        "output":      output,
-        "out_t":       out_t,
-        "out_distance":out_dist,
-        "out_queue":   out_queue,
-        "out_users":   out_users
+        "input": input, \
+        "in_distance":in_distance,\
+        "in_time":in_time, \
+        "in_queue": in_queue, \
+        "in_users": in_users, \
+        "output": output, \
+        "out_t": out_t, \
+        "out_distance": out_dist, \
+        "out_queue": out_queue, \
+        "out_users": out_users
     }
-    labels = {
-        "target": target,
-        "t_queue": target_queue
-    }
+    labels = {"target": target, "t_queue": target_queue}
     return features, labels
+
 
 # This is a function that goes into learning and creates batch data.
 def train_input_fn(train_input, train_out, train_target_dec, train_target_queue, batch_size):
 
-    print("\nLINE_969  --> train_input_fn(\n\t train_input:'{}',\n" +
-          "\ttrain_out:'{}',\n\t train_target_dec:'{}',\n"+\
-          "\ttrain_target_queue:'{}', batch_size:'{}')\n" \
-        .format( \
-            str(train_input),
-            str(train_out),
-            str(train_target_dec),
-            str(train_target_queue),
-            batch_size))
     (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue) =  train_input
     (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue) = train_out
 
@@ -1007,19 +993,18 @@ def train_input_fn(train_input, train_out, train_target_dec, train_target_queue,
     # Sharing through from_tensor_slices
     # Bundle by batch size.
     dataset = dataset.batch(batch_size, drop_remainder=True)
-    # For each element of data, use the rearrange function Convert elements through  # and compose them into maps.
+    # For each element of data, use the rearrange function Convert elements through  # and compose them into maps.
     dataset = dataset.map(rearrange)
     # If you can put the desired number of epochs in the repeat () function,
     # If there are no arguments, iterators are infinite.
     dataset = dataset.repeat()
-    print("--> LINE_992: train_input_fn(..)")
 
     # iterator through make_one_shot_iterator
     # Make it.
     iterator = tf.compat.v1.data.make_one_shot_iterator(dataset) #dataset.make_one_shot_iterator()
     # Tensor of next item via iterator
     # Give the object.
-    print("--> LINE_999: train_input_fn(..)")
+
     return iterator.get_next()
 
 
@@ -1104,6 +1089,7 @@ def to_frequency_table(poiids):
 
 
 def findPopularityFromData(dataset):
+
     global POPULARITY
 
     print( ("... LOADING csv file : 'Data/userVisits-{}-allPOI.csv'".format(dataset)) )
@@ -1122,8 +1108,6 @@ def findPopularityFromData(dataset):
     print(POPULARITY)
 
 def evaluation_popularity( value,targets, idx2char, POPULARITY):
-
-
     index = 0
     popularity_5 = 0
     popularity_10 = 0
@@ -1169,211 +1153,139 @@ def evaluation_popularity( value,targets, idx2char, POPULARITY):
     distance_5 /= index
     distance_10 /= index
 
-
     return popularity_5, popularity_10, distance_5, distance_10
 
-def training_iterate(i, DEFINES, \
-    pre_5, pre_10, f1_5,  f1_10, \
-    recall_5, recall_10, ndcg_5, ndcg_10, \
-    pop5, pop10, dis5, dis10, total_rmse   ):
-    print("\ntraining ITERATION[ {} ] <START>\n".format(i))
-    #print("training ITERATION : <{}>".format(i))
-# Import training data and test data.
-    # Clear the existing models
-    check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
-    os.makedirs(check_point_path, exist_ok=True)
-
-    if (os.path.exists(DEFINES.check_point_path)):
-        clearExistingFile()
-
-    #print("training ITERATION : <{}> classifier.. ".format(i))
-    # Make up an estimator.
-    classifier = tf.estimator.Estimator(
-        model_fn= Model,  # Register the model.
-        model_dir=DEFINES.check_point_path,  # Register checkpoint location.
-        params={  # Pass parameters to the model.
-            'hidden_size': DEFINES.hidden_size,  # Set the weight size.
-            'learning_rate': DEFINES.learning_rate,  # Set learning rate.
-            'vocabulary_length': vocabulary_length, # Sets the dictionary size.
-            'embedding_size': DEFINES.embedding_size,  # Set the embedding size.
-            'max_sequence_length': DEFINES.max_sequence_length,
-            'user_length': user_length,
-            'max_queue': max_queue
-        })
-    print("LINE_1180, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
-
-    # print("classifier = ", classifier)
-    # # Learning run
-
-    train_input = (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue)
-    train_output = (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue)
-
-    print("LINE_1188, training ITERATION : <{}> train_input:\n{} ".format(i,str(train_input)))
-    print("LINE_1189, training ITERATION : <{}> train_output:\n{} ".format(i,str(train_output)))
-
-    eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
-    eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
-
-    print("LINE_1194, training ITERATION : <{}> eval_input:\n{} ".format(i,str(eval_input)))
-    print("LINE_1195, training ITERATION : <{}> eval_output:\n{} ".format(i,str(eval_output)))
-
-    #classifier.train(  input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
-    def input_fn1():
-        train_input_fn (train_input, train_output, \
-                        train_target_dec, train_target_queue,\
-                        DEFINES.batch_size)
-
-    print("LINE_1207, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
-
-    input_fn1=lambda:\
-        train_input_fn(\
-            train_input, train_output, \
-            train_target_dec, train_target_queue,\
-            DEFINES.batch_size \
-        )
-
-    classifier.train(input_fn=input_fn1, steps=DEFINES.train_steps)
-
-    print("LINE_1240, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
-
-    print("LINE_1242, classifier.train() --> ")
-
-    input_fn2 = lambda: \
-        eval_input_fn( \
-            eval_input, eval_output, \
-            eval_target_dec, eval_target_queue, \
-            DEFINES.batch_size \
-        )
-
-    eval_result = classifier.evaluate(input_fn=input_fn2, steps=1)
-    print("LINE_1211, classifier.evaluate() --> ")
-
-    #print("eval_result : \n", eval_result)
-    print("LINE_1214, training ITERATION : <{}> eval_result:\n{} ".format(i,str(eval_result)))
-
-    #print('\nEVAL set precision_5:{precision_5:0.3f} recall_5:{recall_5:0.3f} precision_10:{precision_10:0.3f} recall_10:{recall_10:0.3f}  ndcg_5:{ndcg_5:0.3f}\n ndcg_10:{ndcg_10:0.3f}'.format(**eval_result))
-
-    print("LINE_1238 Iterations = ", i+1)
-
-    c_pre_5, c_recall_5, c_f1_5, c_pre_10, c_recall_10, c_f1_10, c_ndcg_5, c_ndcg_10, rmse = '{precision_5:0.6f},{recall_5:0.6f}, {f1_5:0.6f}, {precision_10:0.6f},{recall_10:0.6f},{f1_10:0.6f}, {ndcg_5:0.6f},{ndcg_10:0.6f},{rmse:0.6f}'.format(**eval_result).split(",")
-
-    # prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
-    #
-    popularity_5, popularity_10, distance_5, distance_10 = 0.0, 0.0, 0.0, 0.0 #evaluation_popularity(prediction_value, eval_input_enc, idx2char, POPULARITY)
-    # print("Iteration = ", i, "  Popularities = ", popularity_5, popularity_10, distance_5, distance_10)
-
-    print("LINE_1247 Iterations = ", (i+1))
-
-    def eval_funt():
-        eval_input_fn( \
-            eval_input, eval_output,
-            eval_target_dec, eval_target_queue,
-            DEFINES.batch_size)
-
-    #prediction_value = classifier.predict(input_fn=eval_funt)
-    eval_fn1=lambda: \
-        eval_input_fn (eval_input, eval_output, \
-                       eval_target_dec, eval_target_queue, \
-                       DEFINES.batch_size)
-
-    prediction_value = classifier.predict(input_fn=eval_fn1)
-
-    distance_5, distance_10  = evaluation_distance(
-        prediction_value, eval_input_enc,\
-        idx2char, Cordinates)
-    print("Iteration = ", i, "  distance = ", distance_5, distance_10)
-
-
-
-
-    pre_5 = pre_5 + float(c_pre_5)
-    pre_10 = pre_10 + float(c_pre_10)
-    f1_5 = f1_5 + float(c_f1_5)
-    f1_10 = f1_10 + float(c_f1_10)
-    recall_5 = recall_5 + float(c_recall_5)
-    recall_10 = recall_10 + float(c_recall_10)
-    ndcg_5 = ndcg_5 + float(c_ndcg_5)
-    ndcg_10 = ndcg_10 + float(c_ndcg_10)
-
-    pop5 += popularity_5
-    pop10 += popularity_10
-    dis5 += float(distance_5)
-    dis10 += float(distance_10)
-    total_rmse = total_rmse + float(rmse)
-
-    # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
-    results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10, popularity_5, distance_5, popularity_10, distance_10, rmse]
-
-    print("\ntraining ITERATION[ {} ] <END>\n".format(i))
-
 def training( DEFINES, iteration_number, \
-            pre_5, pre_10, f1_5, f1_10, \
-            recall_5, recall_10, ndcg_5, ndcg_10, \
-            pop5, pop10, dis5, dis10, total_rmse ):
+              pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, \
+              ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, \
+              total_rmse ):
     for i in range(iteration_number):
-        training_iterate(
-            i, DEFINES, \
-            pre_5, pre_10, \
-            f1_5,  f1_10, \
-            recall_5, recall_10, \
-            ndcg_5, ndcg_10, \
-            pop5, pop10, \
-            dis5, dis10, total_rmse )
+        # Import training data and test data.
+        # Clear the existing models
+        check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
+        os.makedirs(check_point_path, exist_ok=True)
+
+        if (os.path.exists(DEFINES.check_point_path)):
+            clearExistingFile()
+
+        # Make up an estimator.
+        classifier = tf.estimator.Estimator(
+            model_fn= Model,  # Register the model.
+            model_dir=DEFINES.check_point_path,  # Register checkpoint location.
+            params={  # Pass parameters to the model.
+                'hidden_size': DEFINES.hidden_size,  # Set the weight size.
+                'learning_rate': DEFINES.learning_rate,  # Set learning rate.
+                'vocabulary_length': vocabulary_length, # Sets the dictionary size.
+                'embedding_size': DEFINES.embedding_size,  # Set the embedding size.
+                'max_sequence_length': DEFINES.max_sequence_length,
+                'user_length': user_length,
+                'max_queue': max_queue
+            })
+
+        # print("classifier = ", classifier)
+        # # Learning run
+
+        train_input = (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue)
+        train_output = (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue)
+
+        eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
+        eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
+
+        classifier.train(input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
+
+        eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),steps=1)
+        print("\nLINE_1198 eval_result : \n", eval_result)
+
+        print("Iterations = ", i + 1)
+        c_pre_5, c_recall_5, c_f1_5, c_pre_10, c_recall_10, c_f1_10, c_ndcg_5, c_ndcg_10, rmse = '{precision_5:0.6f},{recall_5:0.6f}, {f1_5:0.6f}, {precision_10:0.6f},{recall_10:0.6f},{f1_10:0.6f}, {ndcg_5:0.6f},{ndcg_10:0.6f},{rmse:0.6f}'.format(**eval_result).split(",")
+
+        # prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
+        #
+        popularity_5, popularity_10, distance_5, distance_10 = 0.0, 0.0, 0.0, 0.0 #evaluation_popularity(prediction_value, eval_input_enc, idx2char, POPULARITY)
+        # print("Iteration = ", i, "  Popularities = ", popularity_5, popularity_10, distance_5, distance_10)
+
+        prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
+        distance_5, distance_10  = evaluation_distance(prediction_value, eval_input_enc, idx2char, Cordinates)
+        print("Iteration = ", i, "  distance = ", distance_5, distance_10)
+
+        pre_5     = pre_5     + float(c_pre_5)
+        pre_10    = pre_10    + float(c_pre_10)
+        f1_5      = f1_5      + float(c_f1_5)
+        f1_10     = f1_10     + float(c_f1_10)
+        recall_5  = recall_5  + float(c_recall_5)
+        recall_10 = recall_10 + float(c_recall_10)
+        ndcg_5    = ndcg_5    + float(c_ndcg_5)
+        ndcg_10   = ndcg_10   + float(c_ndcg_10)
+
+        pop5      += popularity_5
+        pop10     += popularity_10
+        dis5      += float(distance_5)
+        dis10     += float(distance_10)
+        total_rmse = total_rmse + float(rmse)
+
+        # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
+        results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, \
+                                        c_recall_5, c_recall_10, c_ndcg_5,  \
+                                        c_ndcg_10, popularity_5, distance_5,\ popularity_10, distance_10, rmse]
 
     ## normalize
-    pre_5      = pre_5     / iteration_number
-    pre_10     = pre_10    / iteration_number
-    f1_5       = f1_5      / iteration_number
-    f1_10      = f1_10     / iteration_number
-    recall_5   = recall_5  / iteration_number
-    recall_10  = recall_10 / iteration_number
-    ndcg_5     = ndcg_5    / iteration_number
-    ndcg_10    = ndcg_10   / iteration_number
-    pop5       = pop5      / iteration_number
-    pop10      = pop10     / iteration_number
-    dis5       = dis5      / iteration_number
-    dis10      = dis10     / iteration_number
-    total_rmse = total_rmse/ iteration_number
+    pre_5      = pre_5      / iteration_number
+    pre_10     = pre_10     / iteration_number
+    f1_5       = f1_5       / iteration_number
+    f1_10      = f1_10      / iteration_number
+    recall_5   = recall_5   / iteration_number
+    recall_10  = recall_10  / iteration_number
+    ndcg_5     = ndcg_5     / iteration_number
+    ndcg_10    = ndcg_10    / iteration_number
 
-    print("TRAIN  -> test data total_precison_5 is %f, total_precison_10 is %f"  % (pre_5, pre_10))
-    print("TRAIN  -> test data total_recall_5 is %f, total_recall_10 is %f"      % (recall_5, recall_10))
-    print("TRAIN  -> test data total_f1_5 is %f, total_f1_10 is %f"              % (f1_5, f1_10))
-    print("TRAIN  -> test data total_ncdd_5 is %f, total_ndcg_10 is %f"          % (ndcg_5, ndcg_10))
-    print("TRAIN  => e test data total pop5 is %f, total pop10 is %f dis5 is %f, total dis 10 is %f" % (pop5, pop10, dis5, dis10))
-    print("TRAIN  => average RMSE =  %f" % (total_rmse))
-
-    pop5 = pop5 / iteration_number
-    pop10 = pop10 / iteration_number
-    dis5 = dis5 / iteration_number
-    dis10 = dis10 / iteration_number
+    pop5       = pop5       / iteration_number
+    pop10      = pop10      / iteration_number
+    dis5       = dis5       / iteration_number
+    dis10      = dis10      / iteration_number
     total_rmse = total_rmse / iteration_number
+
+    print("  -> test data total_precison_5 is %f, total_precison_10 is %f"  % (pre_5, pre_10))
+    print("  -> test data total_recall_5 is %f, total_recall_10 is %f"      % (recall_5, recall_10))
+    print("  -> test data total_f1_5 is %f, total_f1_10 is %f"              % (f1_5, f1_10))
+    print("  -> test data total_ncdd_5 is %f, total_ndcg_10 is %f"          % (ndcg_5, ndcg_10))
+    print("  ==> e test data total pop5 is %f, total pop10 is %f dis5 is %f, total dis 10 is %f" % (pop5, pop10, dis5, dis10))
+    print("  ==> average RMSE =  %f" % (total_rmse))
+
+    pop5       = pop5       / iteration_number
+    pop10      = pop10      / iteration_number
+    dis5       = dis5       / iteration_number
+    dis10      = dis10      / iteration_number
+    total_rmse = total_rmse / iteration_number
+
     result=dict()
-    result['pre_5']=pre_5
-    result['pre_10']=pre_10
-    result['f1_5']=f1_5
-    result['f1_10']=f1_10
-    result['recall_5']=recall_5
-    result['recall_10']=recall_10
-    result['ndcg_5']=ndcg_5
-    result['ndcg_10']=ndcg_10
+    result['pre_5']     = pre_5
+    result['pre_10']    = pre_10
+    result['f1_5']      = f1_5
+    result['f1_10']     = f1_10
+    result['recall_5']  = recall_5
+    result['recall_10'] = recall_10
+    result['ndcg_5']    = ndcg_5
+    result['ndcg_10']   = ndcg_10
     return result
 
 if __name__ == '__main__':
-    pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, total_rmse = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
-    results = pd.DataFrame(
-        columns=['pre_5', 'pre_10', 'f1_5', 'f1_10', 'recall_5', 'recall_10', 'ndcg_5', 'ndcg_10', 'pop_5', 'dis_5',
-                 'pop_10', 'dis_10','rmse'])
 
     iteration_number = 10
+
+    pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, total_rmse = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
+
+    results = pd.DataFrame(
+        columns=['pre_5', 'pre_10',       'f1_5', 'f1_10', \
+                 'recall_5', 'recall_10', 'ndcg_5', 'ndcg_10', \
+                 'pop_5', 'dis_5',        'pop_10', 'dis_10', \
+                 'rmse'])
+
 
     data_out_path = os.path.join(os.getcwd(), DATA_OUT_PATH)
     os.makedirs(data_out_path, exist_ok=True)
 
     print("\n\n### dataset : ", dataset)
     print("### findPopularityFromData(   ", dataset)
-    ############
-    ############
-    ############
     findPopularityFromData(dataset)
 
     #print(POPULARITY)
@@ -1383,9 +1295,6 @@ if __name__ == '__main__':
     # global Cordinates
 
     print("### findCordinates_Category(   ", dataset)
-    ############
-    ############
-    ############
     Cordinates, Category = findCordinates_Category(dataset)
     for key in sorted(Cordinates.keys()) :
         print(f"line_1164   Cordinates[{key}] = {Cordinates[key]}")
@@ -1394,9 +1303,6 @@ if __name__ == '__main__':
 
     #print("Cordinates = ", Cordinates)
 
-    ############
-    ############
-    ############
     print("\n\n### preprocess( dataset: ", dataset)
     max_len = preprocess(dataset)
 
@@ -1404,9 +1310,6 @@ if __name__ == '__main__':
 
     #dep.themepark_or_city()
 
-    ############
-    ############
-    ############
     char2idx, idx2char, vocabulary_length = load_vocabulary()
     # print("char2idx = ", char2idx)
     # print("idx2char = ", idx2char)
@@ -1460,7 +1363,6 @@ if __name__ == '__main__':
 
     print("====> train_target_dec = ", train_target_dec)
 
-
     # This is the part of making evaluation set encoding.
     print("======> enc_processing(eval_input,eval_user, char2idx,Cordinates)")
     eval_input_enc, eval_input_dist, eval_input_users, eval_input_enc_length = enc_processing(eval_input,eval_user, char2idx,Cordinates)
@@ -1507,9 +1409,8 @@ if __name__ == '__main__':
     DEFINES.max_queue_time = max_queue
 
 
-    print("LINE_1466: START TRAINING...")
-
-    results = training(DEFINES, iteration_number, \
+    print("TRAINING...")
+    result = training(DEFINES, iteration_number, \
                       pre_5, pre_10,       \
                       f1_5, f1_10,         \
                       recall_5, recall_10, \
@@ -1520,6 +1421,4 @@ if __name__ == '__main__':
 
     #results.to_excel('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.xlsx')
     #results.to_csv('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.csv')
-    print("TRAINING RESULTS:")
-    for key in results:
-        print(" results[ {} ] -> {} ".format(key, results[key] ))
+    print("RESULTS:\n", result)
