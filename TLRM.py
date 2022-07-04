@@ -211,16 +211,19 @@ def find_idcg():
     return idcg_5, idcg_10
 
 
-def evaluation_distance(value,targets, idx2char, cordinates):
-
+def evaluation_distance(value, targets, idx2char, cordinates):
+    print("\n\nLINE 215: evaluation_distance(...)")
 
     index = 0
     popularity_5 = 0
     popularity_10 = 0
     distance_5, distance_10 = 0, 0
 
+    print("\n\nLINE 222: value :   ", value)
+    print("\n\nLINE 223: targets : ", targets)
 
     for v in value:
+        print("\n\nLINE 2245: evaluation_distance(...)...  value=> ", v)
         pop_5, pop_10 = 0,0
         index2 = 0
 
@@ -502,8 +505,7 @@ def preprocess(dataset):
         #quit(0)
         #print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
 
-        print("  LINE_498,  PROCESS USER_ID:{}, SEQ_ID:{} ( [{} ] , pois) => time:{}, queue:{}"
-            .format( user, seq, tempdfVisits.shape[0], str(time), str(queue)))
+        ### print("  LINE_498,  PROCESS USER_ID:{}, SEQ_ID:{} ( [{} ] , pois) => time:{}, queue:{}".format( user, seq, tempdfVisits.shape[0], str(time), str(queue)))
 
         userid = USERID[user]
 
@@ -958,15 +960,38 @@ def dec_target_processing(value, dictionary):
     return np.asarray(sequences_target_index)
 
 def rearrange(input, in_distance, in_time, in_queue, in_users,output, out_dist, out_t, out_queue, out_users, target, target_queue):
-    print("  --> rearrange(..)")
-    features = {"input": input, "in_distance":in_distance, "in_time":in_time, "in_queue":in_queue, "in_users":in_users, "output": output, "out_t":out_t, "out_distance":out_dist, "out_queue":out_queue, "out_users": out_users}
-    labels = {"target": target, "t_queue": target_queue}
-    return features, labels
+    #print("  --> rearrange(..)")
 
+    features = {
+        "input":       input,
+        "in_distance": in_distance,
+        "in_time":     in_time,
+        "in_queue":    in_queue,
+        "in_users":    in_users,
+        "output":      output,
+        "out_t":       out_t,
+        "out_distance":out_dist,
+        "out_queue":   out_queue,
+        "out_users":   out_users
+    }
+    labels = {
+        "target": target,
+        "t_queue": target_queue
+    }
+    return features, labels
 
 # This is a function that goes into learning and creates batch data.
 def train_input_fn(train_input, train_out, train_target_dec, train_target_queue, batch_size):
 
+    print("\nLINE_969  --> train_input_fn(\n\t train_input:'{}',\n" +
+          "\ttrain_out:'{}',\n\t train_target_dec:'{}',\n"+\
+          "\ttrain_target_queue:'{}', batch_size:'{}')\n" \
+        .format( \
+            str(train_input),
+            str(train_out),
+            str(train_target_dec),
+            str(train_target_queue),
+            batch_size))
     (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue) =  train_input
     (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue) = train_out
 
@@ -987,13 +1012,14 @@ def train_input_fn(train_input, train_out, train_target_dec, train_target_queue,
     # If you can put the desired number of epochs in the repeat () function,
     # If there are no arguments, iterators are infinite.
     dataset = dataset.repeat()
+    print("--> LINE_992: train_input_fn(..)")
 
     # iterator through make_one_shot_iterator
     # Make it.
     iterator = tf.compat.v1.data.make_one_shot_iterator(dataset) #dataset.make_one_shot_iterator()
     # Tensor of next item via iterator
     # Give the object.
-
+    print("--> LINE_999: train_input_fn(..)")
     return iterator.get_next()
 
 
@@ -1147,8 +1173,143 @@ def evaluation_popularity(value,targets, idx2char, POPULARITY):
 
     return popularity_5, popularity_10, distance_5, distance_10
 
-def training(DEFINES, iteration_number, pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, total_rmse ):
+def training_iterate(i):
+    print("\ntraining ITERATION[ {} ] <START>\n".format(i))
+    #print("training ITERATION : <{}>".format(i))
+# Import training data and test data.
+    # Clear the existing models
+    check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
+    os.makedirs(check_point_path, exist_ok=True)
+
+    if (os.path.exists(DEFINES.check_point_path)):
+        clearExistingFile()
+
+    #print("training ITERATION : <{}> classifier.. ".format(i))
+    # Make up an estimator.
+    classifier = tf.estimator.Estimator(
+        model_fn= Model,  # Register the model.
+        model_dir=DEFINES.check_point_path,  # Register checkpoint location.
+        params={  # Pass parameters to the model.
+            'hidden_size': DEFINES.hidden_size,  # Set the weight size.
+            'learning_rate': DEFINES.learning_rate,  # Set learning rate.
+            'vocabulary_length': vocabulary_length, # Sets the dictionary size.
+            'embedding_size': DEFINES.embedding_size,  # Set the embedding size.
+            'max_sequence_length': DEFINES.max_sequence_length,
+            'user_length': user_length,
+            'max_queue': max_queue
+        })
+    print("LINE_1180, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
+
+    # print("classifier = ", classifier)
+    # # Learning run
+
+    train_input = (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue)
+    train_output = (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue)
+
+    print("LINE_1188, training ITERATION : <{}> train_input:\n{} ".format(i,str(train_input)))
+    print("LINE_1189, training ITERATION : <{}> train_output:\n{} ".format(i,str(train_output)))
+
+    eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
+    eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
+
+    print("LINE_1194, training ITERATION : <{}> eval_input:\n{} ".format(i,str(eval_input)))
+    print("LINE_1195, training ITERATION : <{}> eval_output:\n{} ".format(i,str(eval_output)))
+
+    #classifier.train(  input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
+    def input_fn1():
+        train_input_fn (train_input, train_output, \
+                        train_target_dec, train_target_queue,\
+                        DEFINES.batch_size)
+
+    print("LINE_1207, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
+
+    input_fn1=lambda:\
+        train_input_fn(\
+            train_input, train_output, \
+            train_target_dec, train_target_queue,\
+            DEFINES.batch_size \
+        )
+
+    classifier.train(input_fn=input_fn1, steps=DEFINES.train_steps)
+
+    print("LINE_1240, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
+
+    print("LINE_1242, classifier.train() --> ")
+
+    input_fn2 = lambda: \
+        eval_input_fn( \
+            eval_input, eval_output, \
+            eval_target_dec, eval_target_queue, \
+            DEFINES.batch_size \
+        )
+
+    eval_result = classifier.evaluate(input_fn=input_fn2, steps=1)
+    print("LINE_1211, classifier.evaluate() --> ")
+
+    #print("eval_result : \n", eval_result)
+    print("LINE_1214, training ITERATION : <{}> eval_result:\n{} ".format(i,str(eval_result)))
+
+    #print('\nEVAL set precision_5:{precision_5:0.3f} recall_5:{recall_5:0.3f} precision_10:{precision_10:0.3f} recall_10:{recall_10:0.3f}  ndcg_5:{ndcg_5:0.3f}\n ndcg_10:{ndcg_10:0.3f}'.format(**eval_result))
+
+    print("LINE_1238 Iterations = ", i+1)
+
+    c_pre_5, c_recall_5, c_f1_5, c_pre_10, c_recall_10, c_f1_10, c_ndcg_5, c_ndcg_10, rmse = '{precision_5:0.6f},{recall_5:0.6f}, {f1_5:0.6f}, {precision_10:0.6f},{recall_10:0.6f},{f1_10:0.6f}, {ndcg_5:0.6f},{ndcg_10:0.6f},{rmse:0.6f}'.format(**eval_result).split(",")
+
+    # prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
+    #
+    popularity_5, popularity_10, distance_5, distance_10 = 0.0, 0.0, 0.0, 0.0 #evaluation_popularity(prediction_value, eval_input_enc, idx2char, POPULARITY)
+    # print("Iteration = ", i, "  Popularities = ", popularity_5, popularity_10, distance_5, distance_10)
+
+    print("LINE_1247 Iterations = ", (i+1))
+
+    def eval_funt():
+        eval_input_fn( \
+            eval_input, eval_output,
+            eval_target_dec, eval_target_queue,
+            DEFINES.batch_size)
+
+    #prediction_value = classifier.predict(input_fn=eval_funt)
+    eval_fn1=lambda: \
+        eval_input_fn (eval_input, eval_output, \
+                       eval_target_dec, eval_target_queue, \
+                       DEFINES.batch_size)
+
+    prediction_value = classifier.predict(input_fn=eval_fn1)
+
+    distance_5, distance_10  = evaluation_distance(
+        prediction_value, eval_input_enc,\
+        idx2char, Cordinates)
+    print("Iteration = ", i, "  distance = ", distance_5, distance_10)
+
+
+    pre_5 = pre_5 + float(c_pre_5)
+    pre_10 = pre_10 + float(c_pre_10)
+    f1_5 = f1_5 + float(c_f1_5)
+    f1_10 = f1_10 + float(c_f1_10)
+    recall_5 = recall_5 + float(c_recall_5)
+    recall_10 = recall_10 + float(c_recall_10)
+    ndcg_5 = ndcg_5 + float(c_ndcg_5)
+    ndcg_10 = ndcg_10 + float(c_ndcg_10)
+
+    pop5 += popularity_5
+    pop10 += popularity_10
+    dis5 += float(distance_5)
+    dis10 += float(distance_10)
+    total_rmse = total_rmse + float(rmse)
+
+    # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
+    results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10, popularity_5, distance_5, popularity_10, distance_10, rmse]
+
+    print("\ntraining ITERATION[ {} ] <END>\n".format(i))
+
+def training( DEFINES, iteration_number,
+            pre_5, pre_10, f1_5, f1_10, \
+            recall_5, recall_10, ndcg_5, ndcg_10, \
+            pop5, pop10, dis5, dis10, total_rmse ):
+
     for i in range(iteration_number):
+        print("\ntraining ITERATION[ {} ] <START>\n".format(i))
+        #print("training ITERATION : <{}>".format(i))
     # Import training data and test data.
         # Clear the existing models
         check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
@@ -1157,6 +1318,7 @@ def training(DEFINES, iteration_number, pre_5, pre_10, f1_5, f1_10, recall_5, re
         if (os.path.exists(DEFINES.check_point_path)):
             clearExistingFile()
 
+        #print("training ITERATION : <{}> classifier.. ".format(i))
         # Make up an estimator.
         classifier = tf.estimator.Estimator(
             model_fn= Model,  # Register the model.
@@ -1170,6 +1332,7 @@ def training(DEFINES, iteration_number, pre_5, pre_10, f1_5, f1_10, recall_5, re
                 'user_length': user_length,
                 'max_queue': max_queue
             })
+        print("LINE_1180, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
 
         # print("classifier = ", classifier)
         # # Learning run
@@ -1177,19 +1340,53 @@ def training(DEFINES, iteration_number, pre_5, pre_10, f1_5, f1_10, recall_5, re
         train_input = (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue)
         train_output = (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue)
 
+        print("LINE_1188, training ITERATION : <{}> train_input:\n{} ".format(i,str(train_input)))
+        print("LINE_1189, training ITERATION : <{}> train_output:\n{} ".format(i,str(train_output)))
+
         eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
         eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
 
+        print("LINE_1194, training ITERATION : <{}> eval_input:\n{} ".format(i,str(eval_input)))
+        print("LINE_1195, training ITERATION : <{}> eval_output:\n{} ".format(i,str(eval_output)))
 
-        classifier.train(input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
+        #classifier.train(  input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
+        def input_fn1():
+            train_input_fn (train_input, train_output, \
+                            train_target_dec, train_target_queue,\
+                            DEFINES.batch_size)
 
-        eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),steps=1)
-        print("eval_result : \n", eval_result)
+        print("LINE_1207, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
 
+        input_fn1=lambda:\
+            train_input_fn(\
+                train_input, train_output, \
+                train_target_dec, train_target_queue,\
+                DEFINES.batch_size \
+            )
+
+        classifier.train(input_fn=input_fn1, steps=DEFINES.train_steps)
+
+        print("LINE_1240, training ITERATION : <{}> classifier: {}".format(i,str(classifier)) )
+
+        print("LINE_1242, classifier.train() --> ")
+
+        input_fn2 = lambda: \
+            eval_input_fn( \
+                eval_input, eval_output, \
+                eval_target_dec, eval_target_queue, \
+                DEFINES.batch_size \
+            )
+
+        eval_result = classifier.evaluate(input_fn=input_fn2, steps=1)
+        print("LINE_1211, classifier.evaluate() --> ")
+
+        #print("eval_result : \n", eval_result)
+        print("LINE_1214, training ITERATION : <{}> eval_result:\n{} ".format(i,str(eval_result)))
 
         #print('\nEVAL set precision_5:{precision_5:0.3f} recall_5:{recall_5:0.3f} precision_10:{precision_10:0.3f} recall_10:{recall_10:0.3f}  ndcg_5:{ndcg_5:0.3f}\n ndcg_10:{ndcg_10:0.3f}'.format(**eval_result))
 
-        print("Iterations = ", i + 1)
+        print("LINE_1238 Iterations = ", i+1)
+
         c_pre_5, c_recall_5, c_f1_5, c_pre_10, c_recall_10, c_f1_10, c_ndcg_5, c_ndcg_10, rmse = '{precision_5:0.6f},{recall_5:0.6f}, {f1_5:0.6f}, {precision_10:0.6f},{recall_10:0.6f},{f1_10:0.6f}, {ndcg_5:0.6f},{ndcg_10:0.6f},{rmse:0.6f}'.format(**eval_result).split(",")
 
         # prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
@@ -1197,8 +1394,25 @@ def training(DEFINES, iteration_number, pre_5, pre_10, f1_5, f1_10, recall_5, re
         popularity_5, popularity_10, distance_5, distance_10 = 0.0, 0.0, 0.0, 0.0 #evaluation_popularity(prediction_value, eval_input_enc, idx2char, POPULARITY)
         # print("Iteration = ", i, "  Popularities = ", popularity_5, popularity_10, distance_5, distance_10)
 
-        prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
-        distance_5, distance_10  = evaluation_distance(prediction_value, eval_input_enc, idx2char, Cordinates)
+        print("LINE_1247 Iterations = ", (i+1))
+
+        def eval_funt():
+            eval_input_fn( \
+                eval_input, eval_output,
+                eval_target_dec, eval_target_queue,
+                DEFINES.batch_size)
+
+        #prediction_value = classifier.predict(input_fn=eval_funt)
+        eval_fn1=lambda: \
+            eval_input_fn (eval_input, eval_output, \
+                           eval_target_dec, eval_target_queue, \
+                           DEFINES.batch_size)
+
+        prediction_value = classifier.predict(input_fn=eval_fn1)
+
+        distance_5, distance_10  = evaluation_distance(
+            prediction_value, eval_input_enc,\
+            idx2char, Cordinates)
         print("Iteration = ", i, "  distance = ", distance_5, distance_10)
 
 
@@ -1218,8 +1432,9 @@ def training(DEFINES, iteration_number, pre_5, pre_10, f1_5, f1_10, recall_5, re
         total_rmse = total_rmse + float(rmse)
 
         # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
-        results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5,
-                                        c_ndcg_10, popularity_5, distance_5, popularity_10, distance_10, rmse]
+        results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10, popularity_5, distance_5, popularity_10, distance_10, rmse]
+
+        print("\ntraining ITERATION[ {} ] <END>\n".format(i))
 
     ## normalize
     pre_5 = pre_5 / iteration_number
@@ -1396,8 +1611,9 @@ if __name__ == '__main__':
     DEFINES.max_queue_time = max_queue
 
 
-    print("TRAINING...")
-    result = training(DEFINES, iteration_number, \
+    print("LINE_1466: START TRAINING...")
+
+    results = training(DEFINES, iteration_number, \
                       pre_5, pre_10,       \
                       f1_5, f1_10,         \
                       recall_5, recall_10, \
@@ -1408,4 +1624,6 @@ if __name__ == '__main__':
 
     #results.to_excel('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.xlsx')
     #results.to_csv('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.csv')
-    print(result)
+    print("TRAINING RESULTS:")
+    for key in results:
+        print(" results[ {} ] -> {} ".format(key, results[key] ))
