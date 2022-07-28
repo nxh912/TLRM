@@ -44,14 +44,10 @@ from configs import DEFINES
 DATA_OUT_PATH = './data_out/'
 loss_alpha = 0.5
 
-
-if len( sys.argv ) <= 1:
-    print(f" SYNTAX: python3 {sys.argv[0]} <CITY>")
-
 #dataset = 'epcot' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
-#dataset = 'Edin' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
-dataset = sys.argv[1]
-assert dataset in ['Buda','Edin','Melb','Osak','Toro','Delh','Glas','Pert','Vien']
+dataset = 'Melbourne' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
+dataset = 'Edin'
+
 
 def positional_encoding(dim, sentence_length, dtype=tf.float32):
     #Positional Encoding
@@ -216,7 +212,7 @@ def find_idcg():
     return idcg_5, idcg_10
 
 
-def evaluation_distance(value, targets, idx2char, cordinates):
+def evaluation_distance(value,targets, idx2char, cordinates):
 
 
     index = 0
@@ -265,8 +261,8 @@ def evaluation_distance(value, targets, idx2char, cordinates):
 def Model(features, labels, mode, params):
 
 
-    TRAIN =   mode == tf.estimator.ModeKeys.TRAIN
-    EVAL =    mode == tf.estimator.ModeKeys.EVAL
+    TRAIN = mode == tf.estimator.ModeKeys.TRAIN
+    EVAL = mode == tf.estimator.ModeKeys.EVAL
     PREDICT = mode == tf.estimator.ModeKeys.PREDICT
 
     positional_encoded = positional_encoding(params['embedding_size'], DEFINES.max_sequence_length)
@@ -364,46 +360,15 @@ def Model(features, labels, mode, params):
     loss2 = loss_alpha * loss + (1 - loss_alpha) * loss_queue  # tf.group(loss, loss_queue) # K.mean(loss + loss_queue)
     #loss2 = loss + loss_queue
     if EVAL:
-        correct_prediction_5 = tf.reduce_mean(
-            tf.cast(
-                tf.equal(
-                    tf.cast(
-                        tf.tile(label1[:,0:1],[1,5]),
-                        tf.int32),
-                    tf.nn.top_k(logits[:,0:1,:],5)[1]),
-                tf.float32))*5
-        #/ tf.cast((tf.shape(logits)[0] * tf.shape(logits)[1]),tf.float32) #DEFINES.batch_size * params['vocabulary_length'])
-        correct_prediction_10 = tf.reduce_mean(
-            tf.cast(
-                tf.equal(
-                    tf.cast(
-                        tf.tile(label1[:, 0:1], [1, 10]),
-                        tf.int32),
-                    tf.nn.top_k(logits[:, 0:1, :], 10)[1]
-                ),tf.float32)) *10
-
+        correct_prediction_5 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.tile(label1[:,0:1],[1,5]), tf.int32), tf.nn.top_k(logits[:,0:1,:],5)[1]), tf.float32))*5 #/ tf.cast((tf.shape(logits)[0] * tf.shape(logits)[1]),tf.float32) #DEFINES.batch_size * params['vocabulary_length'])
+        correct_prediction_10 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.tile(label1[:, 0:1], [1, 10]), tf.int32), tf.nn.top_k(logits[:, 0:1, :], 10)[1]),tf.float32)) *10
         recall_5 = (correct_prediction_5, correct_prediction_5)
-
         precision_5 = (correct_prediction_5/5, correct_prediction_5/5)
-        
         recall_10 = (correct_prediction_10, correct_prediction_10)
-        
         precision_10 = (correct_prediction_10/10, correct_prediction_10/10)
+        f1_5 = (2*recall_5[0]*precision_5[0] /(recall_5[0] + precision_5[0] + 1e-8), 2*recall_5[0]*precision_5[0] /(recall_5[0] + precision_5[0] + 1e-8))
+        f1_10 = (2 * recall_10[0]* precision_10[0] / (recall_10[0] + precision_10[0] + 1e-8), 2 * recall_10[0]* precision_10[0] / (recall_10[0] + precision_10[0] + 1e-8))
 
-        print(f"LINE_367 : correct_prediction_5:  {correct_prediction_5[0] }")
-        print(f"LINE_377 : correct_prediction_10: {correct_prediction_10[0] }")
-
-        f1_5 = (2*recall_5[0]*precision_5[0] /
-                (recall_5[0] + precision_5[0] + 1e-8),
-                2*recall_5[0]*precision_5[0] /
-                (recall_5[0] + precision_5[0] + 1e-8))
-        f1_10 = (2 * recall_10[0]* precision_10[0] /
-                 (recall_10[0] + precision_10[0] + 1e-8),
-                 2 * recall_10[0]* precision_10[0] /
-                 (recall_10[0] + precision_10[0] + 1e-8))
-
-        print(f"LINE_404 | f1_5:  {f1_5[0]}   recall_5:  {recall_5[0]}   precision_5[0]:  {precision_5[0]}")
-        print(f"LINE_405 | f1_10: {f1_10[0]}  recall_10: {recall_10[0]}  precision_10[0]: {precision_10[0]}")
 
         idcg_5, idcg_10 = find_idcg()
         ndcg_5 = tf.reduce_mean(tf.math.log(2.0) / (tf.math.log(tf.cast(tf.where(tf.cast(tf.equal(tf.cast(tf.tile(label1[:, 0:1], [1, 1]), tf.int32), tf.nn.top_k(logits[:, 0:1, :], 5)[1]), tf.int64)),tf.float32) + 2.0)  ))  / idcg_5 #* tf.cast(DEFINES.batch_size, tf.float32))#
@@ -412,33 +377,22 @@ def Model(features, labels, mode, params):
         ndcg_5 = (ndcg_5, ndcg_5)
         ndcg_10 = (ndcg_10, ndcg_10)
 
-        rmse = tf.sqrt(tf.reduce_mean(
-            tf.math.squared_difference
-            (tf.cast(predict_queue * params['max_queue'], tf.float32),
-             tf.cast(label2 * params['max_queue'], tf.float32))))
+        rmse = tf.sqrt(tf.reduce_mean(tf.math.squared_difference(tf.cast(predict_queue * params['max_queue'], tf.float32),
+                                                            tf.cast(label2 * params['max_queue'], tf.float32))))
         rmse = (rmse, rmse)
         # metrics = {'recall_5': recall_5, 'precision_5': precision_5, 'f1_5': f1_5, 'recall_10': recall_10, 'precision_10': precision_10, 'f1_10': f1_10, 'ndcg_5': ndcg_5, 'ndcg_10': ndcg_10, 'rmse': rmse}
 
-        metrics = {
-            'recall_5': recall_5,
-            'precision_5': precision_5,
-            'f1_5':f1_5,
-            'recall_10': recall_10,
-            'precision_10': precision_10,
-            'f1_10':f1_10,
-            'ndcg_5': ndcg_5,
-            'ndcg_10': ndcg_10,
-            'rmse': rmse
-        }
+        metrics = {'recall_5': recall_5, 'precision_5': precision_5, 'f1_5':f1_5, 'recall_10': recall_10, 'precision_10': precision_10, 'f1_10':f1_10,'ndcg_5': ndcg_5, 'ndcg_10': ndcg_10, 'rmse': rmse}
 
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics)
 
-    assert TRAIN
+    #assert TRAIN
 
     # lrate = d−0.5 *  model · min(step_num−0.5, step_num · warmup_steps−1.5)
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=DEFINES.learning_rate)
     train_op = optimizer.minimize(loss, global_step=tf.compat.v1.train.get_global_step())
     train_op1 = optimizer.minimize(loss_queue, global_step=tf.compat.v1.train.get_global_step())
+
     train_op2 = tf.group(train_op, train_op1)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss2, train_op=train_op2)
@@ -485,11 +439,15 @@ def preprocess(dataset):
     min_poi = 3
     min_user = 3
 
-    # dfVisits = pd.read_excel('DataExcelFormat/userVisits-' + dataset + '-allPOI.xlsx')
-    ##  pd.read_csv(userVisits_file, sep=';', dtype={'photoID':int, 'userID':str, 'dateTaken':int, 'poiID':int, 'poiTheme':str, 'poiFreq':int, 'seqID':int} )
-    dfVisits = pd.read_csv("Data/userVisits-{}-allPOI.csv".format(dataset), sep=';')
-    #print( f"pd.read_csv('Data/userVisits-{dataset}-allPOI.csv")
+    #dfVisits = pd.read_excel('DataExcelFormat/userVisits-' + dataset + '-allPOI.xlsx')
+    dfVisits = pd.read_csv('Data/userVisits-' + dataset + '-allPOI.csv', sep=';')
 
+    ####
+    from poidata import load_files
+    pois, dfVisits, userVisits_testing, costProfCat = \
+        load_files(dataset)
+    ####
+    
     if dataset in ["epcot", "disland", "MagicK", "caliAdv", 'disHolly']:
         dfQueue = pd.read_excel('DataExcelFormat/queueTimes-'+dataset+'.xlsx')
         for i in range(dfQueue.shape[0]):
@@ -497,15 +455,9 @@ def preprocess(dataset):
             QTIME[(poi_q,hour)] = t_q
         print("Q time = ", QTIME)
 
-    print(dfVisits)
-
-    #dfVisits = dfVisits[dfVisits.dateTaken > 0]
-    dfVisits = dfVisits[dfVisits['dateTaken'] > 0]
-
-    #dfVisits['user_freq'] = dfVisits.groupby('userID')['userID'].transform('count')
+    dfVisits = dfVisits[dfVisits.dateTaken > 0]
     dfVisits['user_freq'] = dfVisits.groupby('userID')['userID'].transform('count')
-
-    #dfVisits = dfVisits[dfVisits.user_freq >= min_user]
+    dfVisits = dfVisits[dfVisits.user_freq >= min_user]
     dfVisits['poi_freq'] = dfVisits.groupby('poiID')['poiID'].transform('count')
     dfVisits = dfVisits[dfVisits.poi_freq >= min_poi]
 
@@ -530,6 +482,14 @@ def preprocess(dataset):
         user = tempdfVisits.iloc[0].userID
         pois = [i[0] for i in groupby(tempdfVisits.poiID)] #.unique()
 
+        #print("\n=====>\nLINE 472: preprocess => seqID:", seq)
+        #print("LINE 472: user : ", user)
+        #print("LINE 472: pois : ", pois)
+        #print("LINE 472: visits : \n", tempdfVisits)
+        #quit(0)
+        #print(tempdfVisits)
+
+
         #if len(pois) >= min_poi:
         if user not in USERID:
             #print(f"LINE 488: USERID[{user}] = {len(USERID)}"  )
@@ -538,19 +498,16 @@ def preprocess(dataset):
             continue
 
         userid = len(USERID)
-        #print(f" LINE 493: USERID[{user}] = {userid}"  )
+        print(f" LINE 493: USERID[{user}] = {userid}"  )
         max_len = len(pois)-1 if max_len < len(pois)-1 else max_len
 
         time, queue = time_function(tempdfVisits, pois)
-
+        print("  LINE_498,  time_function( [{} x {}] , pois) => time:{}, queue:{}".format(tempdfVisits.shape[0],tempdfVisits.shape[1], str(time), str(queue)))
         #print("time : ", time)
         #print("queue : ", queue)
         #print("TIME : ")
         #quit(0)
-        #print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
-
-        print("  LINE_498,  PROCESS USER_ID:{}, SEQ_ID:{} ( [{} ] , pois) => time:{}, queue:{}"
-            .format( user, seq, tempdfVisits.shape[0], str(time), str(queue)))
+        print(f"   LINE 498: user:\"{user}\" : time_function(tempdfVisits, pois) ==> "  )
 
         userid = USERID[user]
 
@@ -592,7 +549,7 @@ def preprocess(dataset):
     print("LINE_539... df: \n", df)
 
     #Save input sequence
-    df.to_csv('data_in/input_'+dataset+'_train_TLRM.csv', sep=';', index=False)
+    df.to_csv('data_in/input_'+dataset+'_train_TLRM.csv', index=False)
     # Travel time sequence normalization
     # Recent check has most important
 
@@ -605,7 +562,8 @@ def findCordinates_Category(dataset):
     cordinats ={}
     Category = {}
     #dfNodes = pd.read_excel('DataExcelFormat/POI-' + dataset + '.xlsx')
-    dfNodes = pd.read_csv("Data/POI-{}.csv".format(dataset), sep=';')
+    dfNodes = pd.read_csv('Data/POI-' + dataset + '.csv', sep=';')
+    print(dfNodes)
     for i in range(len(dfNodes)):
         poiID = 'POI_'+ str(dfNodes.iloc[i].poiID)
         lati = dfNodes.iloc[i].lat
@@ -648,10 +606,10 @@ def make_output_embedding(x):
     return np.asarray(x_new)
 
 
-def load_data():
+def load_data(dataset):
 
     path = 'data_in/input_'+dataset+'_train_TLRM.csv'
-    data_df = pd.read_csv(path, header=0, sep=';')
+    data_df = pd.read_csv(path, header=0)
 
     question, answer, user, time, queue, queue_target = list(data_df['Train']), list(data_df['Test']), list(data_df['U']), list(data_df['T']), list(data_df['Q']), list(data_df['Q_t'])
     random_seed = random.randint(10,100)
@@ -751,10 +709,8 @@ def load_vocabulary():
     if (os.path.exists(path)):
         # Through the judgment because data exists
         # Load data
-        print( "LINE_712: data_df = pd.read_csv('{}', encoding='utf-8', sep=';')".format(path))
-        data_df = pd.read_csv(path, encoding='utf-8', sep=';')
+        data_df = pd.read_csv(path, encoding='utf-8')
 
-        print(data_df)
         # Through the data frame of Pandas
         # Bring columns for questions and answers.
         question, answer = list(data_df['Train']), list(data_df['Test'])
@@ -790,6 +746,7 @@ def load_vocabulary():
 
         with open(DEFINES.vocabulary_path, 'w', encoding='utf-8') as vocabulary_file:
             for word in words:
+
                 vocabulary_file.write(word + '\n')
 
     # If dictionary file exists here
@@ -953,7 +910,7 @@ def dec_output_processing(value, dictionary):
     # Indexed value
         # Insert sequences_output_index.
         sequences_output_index.append(sequence_index)
-    #  Convert a regular indexed array to a NumPy array.
+    #  Convert a regular indexed array to a NumPy array.
     # The reason for putting it in the TensorFlow dataset
     # It is pre-work.
     # Pass the indexed array and its length to the NumPy array.
@@ -963,7 +920,6 @@ def dec_output_processing(value, dictionary):
 # The value and key to be indexed are words
 # Take a dictionary whose value is an index.
 def dec_target_processing(value, dictionary):
-    print("  --> dec_target_processing(..)")
     # Holding index values
     # Array (cumulative)
     sequences_target_index = []
@@ -972,12 +928,10 @@ def dec_target_processing(value, dictionary):
         value = prepro_like_morphlized(value)
     # Blows line by line.
     for sequence in value:
-        #print("\n  line_933 sequence => ", sequence)
         # FILTERS = "([~.,!? \" ':;) (]) "
         # Using normalization, the filter contains
         # Replace values ​​with "".
         sequence = re.sub(CHANGE_FILTER, "", sequence)
-        print("  line_939 sequence => ", sequence)
         # Bring word by space unit in sentence
         # Enter the index, which is the value of the dictionary.
         # Put END at the end of decoding output.
@@ -1004,19 +958,7 @@ def dec_target_processing(value, dictionary):
     return np.asarray(sequences_target_index)
 
 def rearrange(input, in_distance, in_time, in_queue, in_users,output, out_dist, out_t, out_queue, out_users, target, target_queue):
-    #print("  --> rearrange(..)")
-    features = {
-        "input": input, \
-        "in_distance":in_distance,\
-        "in_time":in_time, \
-        "in_queue": in_queue, \
-        "in_users": in_users, \
-        "output": output, \
-        "out_t": out_t, \
-        "out_distance": out_dist, \
-        "out_queue": out_queue, \
-        "out_users": out_users
-    }
+    features = {"input": input, "in_distance":in_distance, "in_time":in_time, "in_queue":in_queue, "in_users":in_users, "output": output, "out_t":out_t, "out_distance":out_dist, "out_queue":out_queue, "out_users": out_users}
     labels = {"target": target, "t_queue": target_queue}
     return features, labels
 
@@ -1039,7 +981,7 @@ def train_input_fn(train_input, train_out, train_target_dec, train_target_queue,
     # Sharing through from_tensor_slices
     # Bundle by batch size.
     dataset = dataset.batch(batch_size, drop_remainder=True)
-    # For each element of data, use the rearrange function Convert elements through  # and compose them into maps.
+    # For each element of data, use the rearrange function Convert elements through  # and compose them into maps.
     dataset = dataset.map(rearrange)
     # If you can put the desired number of epochs in the repeat () function,
     # If there are no arguments, iterators are infinite.
@@ -1138,13 +1080,10 @@ def findPopularityFromData(dataset):
 
     global POPULARITY
 
-    print( ("... LOADING csv file : 'Data/userVisits-{}-allPOI.csv'".format(dataset)) )
-    userVisits_file="Data/userVisits-{}-allPOI.csv".format(dataset)
-    dfvisits1 = pd.read_csv(userVisits_file, sep=';', dtype={'photoID':int, 'userID':str, 'dateTaken':int, 'poiID':int, 'poiTheme':str, 'poiFreq':int, 'seqID':int} )
-
+    print( ("... LOADING xlsx file : 'DataExcelFormat/userVisits-{}-allPOI.xlsx'".format(dataset)) )
+    dfvisits1 = pd.read_csv('Data/userVisits-' + dataset + '-allPOI.csv', sep=';')
+    #print(dfvisits1)
     #dfvisits1.drop_duplicates(subset=['userID', 'poiID', 'seqID'])
-    print(dfvisits1)
-    dfvisits1.drop_duplicates(subset=['poiID', 'seqID'])
 
     print("\ndfvisits1 :\n", list(dfvisits1))
     print("\ndfvisits1.poiID :\n", list(sorted(set(dfvisits1.poiID))))
@@ -1153,7 +1092,9 @@ def findPopularityFromData(dataset):
     print("\n---> to_frequency_table:")
     print(POPULARITY)
 
-def evaluation_popularity( value,targets, idx2char, POPULARITY):
+def evaluation_popularity(value,targets, idx2char, POPULARITY):
+
+    print("LINE 1091:  evaluation_popularity ")
     index = 0
     popularity_5 = 0
     popularity_10 = 0
@@ -1199,139 +1140,19 @@ def evaluation_popularity( value,targets, idx2char, POPULARITY):
     distance_5 /= index
     distance_10 /= index
 
+
     return popularity_5, popularity_10, distance_5, distance_10
 
-def training( DEFINES, iteration_number, \
-              pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, \
-              ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, \
-              total_rmse ):
-    for i in range(iteration_number):
-        print(f"\n\n>>> ITERATION: {i} / {iteration_number}")
-        # Import training data and test data.
-        # Clear the existing models
-        check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
-        os.makedirs(check_point_path, exist_ok=True)
-
-        if (os.path.exists(DEFINES.check_point_path)):
-            clearExistingFile()
-
-        # Make up an estimator.
-        classifier = tf.estimator.Estimator(
-            model_fn= Model,                     # Register the model.
-            model_dir=DEFINES.check_point_path,  # Register checkpoint location.
-            params={                             # Pass parameters to the model.
-                'hidden_size': DEFINES.hidden_size,  # Set the weight size.
-                'learning_rate': DEFINES.learning_rate,  # Set learning rate.
-                'vocabulary_length': vocabulary_length, # Sets the dictionary size.
-                'embedding_size': DEFINES.embedding_size,  # Set the embedding size.
-                'max_sequence_length': DEFINES.max_sequence_length,
-                'user_length': user_length,
-                'max_queue': max_queue
-            })
-
-        # print("classifier = ", classifier)
-        # # Learning run
-
-        train_input = (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue)
-        train_output = (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue)
-
-        eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
-        eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
-
-        classifier.train(
-            input_fn = lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size),
-            steps=DEFINES.train_steps
-            )
-
-        eval_result = classifier.evaluate(
-            input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),
-            steps=1
-        )
-        print("\nLINE_1198 eval_result : \n", eval_result)
-
-        print("Iterations = ", i + 1)
-        c_pre_5, c_recall_5, c_f1_5, c_pre_10, c_recall_10, c_f1_10, c_ndcg_5, c_ndcg_10, rmse = '{precision_5:0.6f},{recall_5:0.6f}, {f1_5:0.6f}, {precision_10:0.6f},{recall_10:0.6f},{f1_10:0.6f}, {ndcg_5:0.6f},{ndcg_10:0.6f},{rmse:0.6f}'.format(**eval_result).split(",")
-
-        # prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
-        #
-        popularity_5, popularity_10, distance_5, distance_10 = 0.0, 0.0, 0.0, 0.0 #evaluation_popularity(prediction_value, eval_input_enc, idx2char, POPULARITY)
-        # print("Iteration = ", i, "  Popularities = ", popularity_5, popularity_10, distance_5, distance_10)
-
-        prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
-        distance_5, distance_10  = evaluation_distance(prediction_value, eval_input_enc, idx2char, Cordinates)
-        print("Iteration = ", i, "  distance = ", distance_5, distance_10)
-
-        pre_5     =  pre_5     + float(c_pre_5)
-        pre_10    =  pre_10    + float(c_pre_10)
-        f1_5      =  f1_5      + float(c_f1_5)
-        f1_10     =  f1_10     + float(c_f1_10)
-        recall_5  =  recall_5  + float(c_recall_5)
-        recall_10 =  recall_10 + float(c_recall_10)
-        ndcg_5    =  ndcg_5    + float(c_ndcg_5)
-        pop5      += popularity_5
-        pop10     += popularity_10
-        dis5      += float(distance_5)
-        dis10     += float(distance_10)
-        total_rmse = total_rmse + float(rmse)
-
-        # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
-        results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, \
-                                        c_recall_5, c_recall_10, c_ndcg_5,  \
-                                        c_ndcg_10, popularity_5, distance_5,\
-                                        popularity_10, distance_10, rmse]
-
-    ## normalize
-    pre_5      = pre_5      / iteration_number
-    pre_10     = pre_10     / iteration_number
-    f1_5       = f1_5       / iteration_number
-    f1_10      = f1_10      / iteration_number
-    recall_5   = recall_5   / iteration_number
-    recall_10  = recall_10  / iteration_number
-    ndcg_5     = ndcg_5     / iteration_number
-    ndcg_10    = ndcg_10    / iteration_number
-
-    pop5       = pop5       / iteration_number
-    pop10      = pop10      / iteration_number
-    dis5       = dis5       / iteration_number
-    dis10      = dis10      / iteration_number
-    total_rmse = total_rmse / iteration_number
-
-    print("RESULT  -> test data total_precison_5 is %f, total_precison_10 is %f"  % (pre_5, pre_10))
-    print("RESULT  -> test data total_recall_5   is %f, total_recall_10   is %f"  % (recall_5, recall_10))
-    print("RESULT  -> test data total_f1_5       is %f, total_f1_10       is %f"  % (f1_5, f1_10))
-    print("  -> test data total_ncdd_5 is %f, total_ndcg_10 is %f"          % (ndcg_5, ndcg_10))
-    print("  ==> e test data total pop5 is %f, total pop10 is %f dis5 is %f, total dis 10 is %f" % (pop5, pop10, dis5, dis10))
-    print("  ==> average RMSE =  %f" % (total_rmse))
-
-    pop5       = pop5       / iteration_number
-    pop10      = pop10      / iteration_number
-    dis5       = dis5       / iteration_number
-    dis10      = dis10      / iteration_number
-    total_rmse = total_rmse / iteration_number
-
-    result=dict()
-    result['pre_5']     = pre_5
-    result['pre_10']    = pre_10
-    result['f1_5']      = f1_5
-    result['f1_10']     = f1_10
-    result['recall_5']  = recall_5
-    result['recall_10'] = recall_10
-    result['ndcg_5']    = ndcg_5
-    result['ndcg_10']   = ndcg_10
-    return result
-
 if __name__ == '__main__':
-
-    iteration_number = 10
-
+    # pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, ndcg_5, ndcg_10 = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
     pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, total_rmse = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
+    # results = pd.DataFrame(columns=['pre_5', 'pre_10', 'f1_5', 'f1_10', 'recall_5', 'recall_10', 'ndcg_5', 'ndcg_10'])
     results = pd.DataFrame(
-        columns=['pre_5', 'pre_10',       'f1_5', 'f1_10',     \
-                 'recall_5', 'recall_10', 'ndcg_5', 'ndcg_10', \
-                 'pop_5', 'dis_5',        'pop_10', 'dis_10',  \
-                 'rmse'])
+        columns=['pre_5', 'pre_10', 'f1_5', 'f1_10', 'recall_5', 'recall_10', 'ndcg_5', 'ndcg_10', 'pop_5', 'dis_5',
+                 'pop_10', 'dis_10','rmse'])
 
+    iteration_number = 10
 
     data_out_path = os.path.join(os.getcwd(), DATA_OUT_PATH)
     os.makedirs(data_out_path, exist_ok=True)
@@ -1358,6 +1179,9 @@ if __name__ == '__main__':
     print("\n\n### preprocess( dataset: ", dataset)
     max_len = preprocess(dataset)
 
+
+
+
     DEFINES.max_sequence_length = max_len+1
 
     #dep.themepark_or_city()
@@ -1368,23 +1192,25 @@ if __name__ == '__main__':
     # print(" vocabulary_length = ", vocabulary_length)
     DEFINES.vocabulary_size = vocabulary_length
     print(f"\n  line_1130 DEFINES.vocabulary_size = {DEFINES} ")
+
+    
     for i in range(1, DEFINES.vocabulary_size + 1):
         if 'POI_' + str(i) not in POPULARITY:
             POPULARITY['POI_' + str(i)] = 1
 
-    train_input, train_label, eval_input, eval_label, test_input, test_label, train_time, eval_time, user, queue , target_queue = load_data()
+    train_input, train_label, eval_input, eval_label, test_input, test_label, train_time, eval_time, user, queue , target_queue = load_data(dataset)
+
+
     (train_user, eval_user)  = user
     (train_queue, eval_queue) = queue
     (train_target_queue, eval_target_queue) = target_queue
 
     # This is the part of creating a training set encoding.
-    train_input_enc, train_input_dist,train_input_users, train_input_enc_length = \
-        enc_processing(train_input, train_user, char2idx, Cordinates)
-
-    print("\nline_1208, train_input_enc, train_input_dist,train_input_users, train_input_enc_length = enc_processing(train_input, train_user, char2idx, Cordinates)")
+    train_input_enc, train_input_dist,train_input_users, train_input_enc_length = enc_processing(train_input, train_user, char2idx, Cordinates)
 
     # print(train_input_enc)
     # print(train_input_dist)
+
 
     train_input_time = padding(train_time, DEFINES.max_sequence_length)
     train_input_queue = padding(train_queue, DEFINES.max_sequence_length)
@@ -1392,53 +1218,30 @@ if __name__ == '__main__':
     # print("train time = ", train_input_time)
     # print("train input queue = ", train_input_queue)
 
+
     train_output_dec, train_output_dec_length = dec_output_processing(train_label, char2idx)
-    print("==> train_output_dist = make_output_embedding(train_input_dist)")
-
     train_output_dist = make_output_embedding(train_input_dist)
-    print("==> train_output_time = make_output_embedding(train_input_time)")
-
     train_output_time = make_output_embedding(train_input_time)
-    print("==> strain_output_time = make_output_embedding(train_input_time)")
-
     train_output_queue = make_output_embedding(train_input_queue)
-    print("==> train_output_queue = make_output_embedding(train_input_queue)")
-
     train_output_users = make_output_embedding(train_input_users)
-    print("==> train_output_users = make_output_embedding(train_input_users)")
 
 
-    print("====> train_target_dec = dec_target_processing(train_label, char2idx)")
+
     train_target_dec = dec_target_processing(train_label, char2idx)
 
-    print("====> train_target_dec = ", train_target_dec)
+    print("Target = ", train_target_dec)
 
     # This is the part of making evaluation set encoding.
-    print("======> enc_processing(eval_input,eval_user, char2idx,Cordinates)")
     eval_input_enc, eval_input_dist, eval_input_users, eval_input_enc_length = enc_processing(eval_input,eval_user, char2idx,Cordinates)
-
-    print("======> padding(eval_time,DEFINES.max_sequence_length)")
     eval_input_time = padding(eval_time,DEFINES.max_sequence_length)
-
-    print("======> padding(eval_input,eval_user, char2idx,Cordinates)")
     eval_input_queue = padding(eval_queue, DEFINES.max_sequence_length)
 
-    print("======> dec_output_processing(eval_label, char2idx))")
     eval_output_dec, eval_output_dec_length = dec_output_processing(eval_label, char2idx)
-
-    print("======> make_output_embedding(eval_input_dist)")
     eval_output_dist = make_output_embedding(eval_input_dist)
-
-    print("======> make_output_embedding(eval_input_time)")
     eval_output_time = make_output_embedding(eval_input_time)
-
-    print("======> make_output_embedding(eval_input_queue)")
     eval_output_queue = make_output_embedding(eval_input_queue)
 
-    print("======> make_output_embedding(eval_input_users)")
     eval_output_users = make_output_embedding(eval_input_users)
-
-    print("======> dec_target_processing(eval_label, char2idx)")
     eval_target_dec = dec_target_processing(eval_label, char2idx)
 
     # print("eval target dec = ", eval_target_dec)
@@ -1446,7 +1249,6 @@ if __name__ == '__main__':
 
     user_length = max(max([max(y) for y in eval_input_users]), max([max(y) for y in train_input_users]))+1
     # Find max queue time and normalize based on 0-1
-
     max_queue = max(max([max(y) for y in train_input_queue]), max([max(y) for y in eval_input_queue]))
     # print(max_queue)
 
@@ -1454,26 +1256,119 @@ if __name__ == '__main__':
     eval_input_queue = np.asarray([[y/ max_queue for y in x] for x in eval_input_queue])
     train_output_queue = np.asarray([[y / max_queue for y in x] for x in train_output_queue])
     eval_output_queue = np.asarray([[y / max_queue for y in x] for x in eval_output_queue])
-    print("\nline 1284  eval_target_queue ==> ", eval_target_queue)
+    print(train_target_queue)
     print(eval_target_queue)
     train_target_queue = np.asarray([y / max_queue for y in train_target_queue])
-    print("\nline 1288  train_target_queue ==> ", train_target_queue)
     eval_target_queue = np.asarray([y / max_queue for y in eval_target_queue])
-    print("\nline 1288  eval_target_queue ==> ", eval_target_queue)
 
     DEFINES.max_queue_time = max_queue
 
 
-    print("TRAINING...")
-    result = training(DEFINES, iteration_number, \
-                      pre_5, pre_10,       \
-                      f1_5, f1_10,         \
-                      recall_5, recall_10, \
-                      ndcg_5, ndcg_10,     \
-                      pop5, pop10,         \
-                      dis5, dis10,         \
-                      total_rmse)
+    for i in range(iteration_number):
+    # Import training data and test data.
+        # Clear the existing models
+        print(f"\b\bLINE 1262 iteration #{i} / {iteration_number}")
+        check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
+        os.makedirs(check_point_path, exist_ok=True)
+
+        if (os.path.exists(DEFINES.check_point_path)):
+            clearExistingFile()
+
+        # Make up an estimator.
+        classifier = tf.estimator.Estimator(
+            model_fn= Model,  # Register the model.
+            model_dir=DEFINES.check_point_path,  # Register checkpoint location.
+            params={  # Pass parameters to the model.
+                'hidden_size': DEFINES.hidden_size,  # Set the weight size.
+                'learning_rate': DEFINES.learning_rate,  # Set learning rate.
+                'vocabulary_length': vocabulary_length, # Sets the dictionary size.
+                'embedding_size': DEFINES.embedding_size,  # Set the embedding size.
+                'max_sequence_length': DEFINES.max_sequence_length,
+                'user_length': user_length,
+                'max_queue': max_queue
+            })
+
+        # print("classifier = ", classifier)
+        # # Learning run
+
+        train_input = (train_input_enc, train_input_dist, train_input_time, train_input_users, train_input_queue)
+        train_output = (train_output_dec, train_output_dist, train_output_time, train_output_users, train_output_queue)
+
+        eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
+        eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
+
+
+        classifier.train(input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
+
+        eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),steps=1)
+        print("eval_result : \n", eval_result)
+
+
+        #print('\nEVAL set precision_5:{precision_5:0.3f} recall_5:{recall_5:0.3f} precision_10:{precision_10:0.3f} recall_10:{recall_10:0.3f}  ndcg_5:{ndcg_5:0.3f}\n ndcg_10:{ndcg_10:0.3f}'.format(**eval_result))
+
+        print("Iterations = ", i + 1)
+        c_pre_5, c_recall_5, c_f1_5, c_pre_10, c_recall_10, c_f1_10, c_ndcg_5, c_ndcg_10, rmse = '{precision_5:0.6f},{recall_5:0.6f}, {f1_5:0.6f}, {precision_10:0.6f},{recall_10:0.6f},{f1_10:0.6f}, {ndcg_5:0.6f},{ndcg_10:0.6f},{rmse:0.6f}'.format(**eval_result).split(",")
+        print(f"LINE 1302: c_pre_5: {c_pre_5:}, c_recall_5: {c_recall_5:}, c_f1_5: {c_f1_5:}, c_pre_10: {c_pre_10:}, c_recall_10: {c_recall_10:}, c_f1_10: {c_f1_10:}, c_ndcg_5: {c_ndcg_5:}, c_ndcg_10: {c_ndcg_10},")
+
+        # prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
+        #
+        popularity_5, popularity_10, distance_5, distance_10 = 0.0, 0.0, 0.0, 0.0 #evaluation_ popularity(prediction_value, eval_input_enc, idx2char, POPULARITY)
+        # print("Iteration = ", i, "  Popularities = ", popularity_5, popularity_10, distance_5, distance_10)
+
+        prediction_value = classifier.predict(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size))
+        distance_5, distance_10  = evaluation_distance(prediction_value, eval_input_enc, idx2char, Cordinates)
+        print("Iteration = ", i, "  distance = ", distance_5, distance_10)
+
+
+        pre_5 = pre_5 + float(c_pre_5)
+        pre_10 = pre_10 + float(c_pre_10)
+        f1_5 = f1_5 + float(c_f1_5)
+        f1_10 = f1_10 + float(c_f1_10)
+        recall_5 = recall_5 + float(c_recall_5)
+        recall_10 = recall_10 + float(c_recall_10)
+        ndcg_5 = ndcg_5 + float(c_ndcg_5)
+        ndcg_10 = ndcg_10 + float(c_ndcg_10)
+
+        pop5 += popularity_5
+        pop10 += popularity_10
+        dis5 += float(distance_5)
+        dis10 += float(distance_10)
+        total_rmse = total_rmse + float(rmse)
+
+        # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
+        results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5,
+                                        c_ndcg_10, popularity_5, distance_5, popularity_10, distance_10, rmse]
+
+    pre_5 = pre_5 / iteration_number
+    pre_10 = pre_10 / iteration_number
+    f1_5 = f1_5 / iteration_number
+    f1_10 = f1_10 / iteration_number
+    recall_5 = recall_5 / iteration_number
+    recall_10 = recall_10 / iteration_number
+    ndcg_5 = ndcg_5 / iteration_number
+    ndcg_10 = ndcg_10 / iteration_number
+
+    pop5 = pop5 / iteration_number
+    pop10 = pop10 / iteration_number
+    dis5 = dis5 / iteration_number
+    dis10 = dis10 / iteration_number
+    total_rmse = total_rmse / iteration_number
+
+
+
+    print("The test data total_precison_5 is %f, total_precison_10 is %f" % (pre_5, pre_10))
+    print("The test data total_recall_5 is %f, total_recall_10 is %f" % (recall_5, recall_10))
+    print("The test data total_f1_5 is %f, total_f1_10 is %f" % (f1_5, f1_10))
+    print("The test data total_ncdd_5 is %f, total_ndcg_10 is %f" % (ndcg_5, ndcg_10))
+
+
+    print("The test data total pop5 is %f, total pop10 is %f dis5 is %f, total dis 10 is %f" % (
+    pop5, pop10, dis5, dis10))
+
+    print("Average RMSE =  %f" % (total_rmse))
+
 
     #results.to_excel('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.xlsx')
-    #results.to_csv('Results_Final/TMLR_results_' + dataset+"_2_" + str(loss_alpha)+'pop.csv')
-    print("RESULTS:\n", result)
+    #results.to_excel("Results_Final/TMLR_results_{}_2_{}_pop.xlsx'. format(dataset+,loss_alpha))
+    results.to_csv("TMLR_results_{}_2_{}_pop.csv", format(dataset,loss_alpha))
+
