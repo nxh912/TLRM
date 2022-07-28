@@ -44,9 +44,14 @@ from configs import DEFINES
 DATA_OUT_PATH = './data_out/'
 loss_alpha = 0.5
 
-#dataset = 'epcot' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
-dataset = 'Edin' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
 
+if len( sys.argv ) <= 1:
+    print(f" SYNTAX: python3 {sys.argv[0]} <CITY>")
+
+#dataset = 'epcot' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
+#dataset = 'Edin' # Melbourne, Edin, Buda, caliAdv, MagicK, epcot
+dataset = sys.argv[1]
+assert dataset in ['Buda','Edin','Melb','Osak','Toro','Delh','Glas','Pert','Vien']
 
 def positional_encoding(dim, sentence_length, dtype=tf.float32):
     #Positional Encoding
@@ -260,8 +265,8 @@ def evaluation_distance(value, targets, idx2char, cordinates):
 def Model(features, labels, mode, params):
 
 
-    TRAIN = mode == tf.estimator.ModeKeys.TRAIN
-    EVAL = mode == tf.estimator.ModeKeys.EVAL
+    TRAIN =   mode == tf.estimator.ModeKeys.TRAIN
+    EVAL =    mode == tf.estimator.ModeKeys.EVAL
     PREDICT = mode == tf.estimator.ModeKeys.PREDICT
 
     positional_encoded = positional_encoding(params['embedding_size'], DEFINES.max_sequence_length)
@@ -359,15 +364,46 @@ def Model(features, labels, mode, params):
     loss2 = loss_alpha * loss + (1 - loss_alpha) * loss_queue  # tf.group(loss, loss_queue) # K.mean(loss + loss_queue)
     #loss2 = loss + loss_queue
     if EVAL:
-        correct_prediction_5 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.tile(label1[:,0:1],[1,5]), tf.int32), tf.nn.top_k(logits[:,0:1,:],5)[1]), tf.float32))*5 #/ tf.cast((tf.shape(logits)[0] * tf.shape(logits)[1]),tf.float32) #DEFINES.batch_size * params['vocabulary_length'])
-        correct_prediction_10 = tf.reduce_mean(tf.cast(tf.equal(tf.cast(tf.tile(label1[:, 0:1], [1, 10]), tf.int32), tf.nn.top_k(logits[:, 0:1, :], 10)[1]),tf.float32)) *10
-        recall_5 = (correct_prediction_5, correct_prediction_5)
-        precision_5 = (correct_prediction_5/5, correct_prediction_5/5)
-        recall_10 = (correct_prediction_10, correct_prediction_10)
-        precision_10 = (correct_prediction_10/10, correct_prediction_10/10)
-        f1_5 = (2*recall_5[0]*precision_5[0] /(recall_5[0] + precision_5[0] + 1e-8), 2*recall_5[0]*precision_5[0] /(recall_5[0] + precision_5[0] + 1e-8))
-        f1_10 = (2 * recall_10[0]* precision_10[0] / (recall_10[0] + precision_10[0] + 1e-8), 2 * recall_10[0]* precision_10[0] / (recall_10[0] + precision_10[0] + 1e-8))
+        correct_prediction_5 = tf.reduce_mean(
+            tf.cast(
+                tf.equal(
+                    tf.cast(
+                        tf.tile(label1[:,0:1],[1,5]),
+                        tf.int32),
+                    tf.nn.top_k(logits[:,0:1,:],5)[1]),
+                tf.float32))*5
+        #/ tf.cast((tf.shape(logits)[0] * tf.shape(logits)[1]),tf.float32) #DEFINES.batch_size * params['vocabulary_length'])
+        correct_prediction_10 = tf.reduce_mean(
+            tf.cast(
+                tf.equal(
+                    tf.cast(
+                        tf.tile(label1[:, 0:1], [1, 10]),
+                        tf.int32),
+                    tf.nn.top_k(logits[:, 0:1, :], 10)[1]
+                ),tf.float32)) *10
 
+        recall_5 = (correct_prediction_5, correct_prediction_5)
+
+        precision_5 = (correct_prediction_5/5, correct_prediction_5/5)
+        
+        recall_10 = (correct_prediction_10, correct_prediction_10)
+        
+        precision_10 = (correct_prediction_10/10, correct_prediction_10/10)
+
+        print(f"LINE_367 : correct_prediction_5:  {correct_prediction_5[0] }")
+        print(f"LINE_377 : correct_prediction_10: {correct_prediction_10[0] }")
+
+        f1_5 = (2*recall_5[0]*precision_5[0] /
+                (recall_5[0] + precision_5[0] + 1e-8),
+                2*recall_5[0]*precision_5[0] /
+                (recall_5[0] + precision_5[0] + 1e-8))
+        f1_10 = (2 * recall_10[0]* precision_10[0] /
+                 (recall_10[0] + precision_10[0] + 1e-8),
+                 2 * recall_10[0]* precision_10[0] /
+                 (recall_10[0] + precision_10[0] + 1e-8))
+
+        print(f"LINE_404 | f1_5:  {f1_5[0]}   recall_5:  {recall_5[0]}   precision_5[0]:  {precision_5[0]}")
+        print(f"LINE_405 | f1_10: {f1_10[0]}  recall_10: {recall_10[0]}  precision_10[0]: {precision_10[0]}")
 
         idcg_5, idcg_10 = find_idcg()
         ndcg_5 = tf.reduce_mean(tf.math.log(2.0) / (tf.math.log(tf.cast(tf.where(tf.cast(tf.equal(tf.cast(tf.tile(label1[:, 0:1], [1, 1]), tf.int32), tf.nn.top_k(logits[:, 0:1, :], 5)[1]), tf.int64)),tf.float32) + 2.0)  ))  / idcg_5 #* tf.cast(DEFINES.batch_size, tf.float32))#
@@ -376,12 +412,24 @@ def Model(features, labels, mode, params):
         ndcg_5 = (ndcg_5, ndcg_5)
         ndcg_10 = (ndcg_10, ndcg_10)
 
-        rmse = tf.sqrt(tf.reduce_mean(tf.math.squared_difference(tf.cast(predict_queue * params['max_queue'], tf.float32),
-                                                            tf.cast(label2 * params['max_queue'], tf.float32))))
+        rmse = tf.sqrt(tf.reduce_mean(
+            tf.math.squared_difference
+            (tf.cast(predict_queue * params['max_queue'], tf.float32),
+             tf.cast(label2 * params['max_queue'], tf.float32))))
         rmse = (rmse, rmse)
         # metrics = {'recall_5': recall_5, 'precision_5': precision_5, 'f1_5': f1_5, 'recall_10': recall_10, 'precision_10': precision_10, 'f1_10': f1_10, 'ndcg_5': ndcg_5, 'ndcg_10': ndcg_10, 'rmse': rmse}
 
-        metrics = {'recall_5': recall_5, 'precision_5': precision_5, 'f1_5':f1_5, 'recall_10': recall_10, 'precision_10': precision_10, 'f1_10':f1_10,'ndcg_5': ndcg_5, 'ndcg_10': ndcg_10, 'rmse': rmse}
+        metrics = {
+            'recall_5': recall_5,
+            'precision_5': precision_5,
+            'f1_5':f1_5,
+            'recall_10': recall_10,
+            'precision_10': precision_10,
+            'f1_10':f1_10,
+            'ndcg_5': ndcg_5,
+            'ndcg_10': ndcg_10,
+            'rmse': rmse
+        }
 
         return tf.estimator.EstimatorSpec(mode, loss=loss, eval_metric_ops=metrics)
 
@@ -391,7 +439,6 @@ def Model(features, labels, mode, params):
     optimizer = tf.compat.v1.train.AdamOptimizer(learning_rate=DEFINES.learning_rate)
     train_op = optimizer.minimize(loss, global_step=tf.compat.v1.train.get_global_step())
     train_op1 = optimizer.minimize(loss_queue, global_step=tf.compat.v1.train.get_global_step())
-
     train_op2 = tf.group(train_op, train_op1)
 
     return tf.estimator.EstimatorSpec(mode, loss=loss2, train_op=train_op2)
@@ -743,7 +790,6 @@ def load_vocabulary():
 
         with open(DEFINES.vocabulary_path, 'w', encoding='utf-8') as vocabulary_file:
             for word in words:
-
                 vocabulary_file.write(word + '\n')
 
     # If dictionary file exists here
@@ -1160,6 +1206,7 @@ def training( DEFINES, iteration_number, \
               ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, \
               total_rmse ):
     for i in range(iteration_number):
+        print(f"\n\n>>> ITERATION: {i} / {iteration_number}")
         # Import training data and test data.
         # Clear the existing models
         check_point_path = os.path.join(os.getcwd(), DEFINES.check_point_path)
@@ -1170,9 +1217,9 @@ def training( DEFINES, iteration_number, \
 
         # Make up an estimator.
         classifier = tf.estimator.Estimator(
-            model_fn= Model,  # Register the model.
+            model_fn= Model,                     # Register the model.
             model_dir=DEFINES.check_point_path,  # Register checkpoint location.
-            params={  # Pass parameters to the model.
+            params={                             # Pass parameters to the model.
                 'hidden_size': DEFINES.hidden_size,  # Set the weight size.
                 'learning_rate': DEFINES.learning_rate,  # Set learning rate.
                 'vocabulary_length': vocabulary_length, # Sets the dictionary size.
@@ -1191,9 +1238,15 @@ def training( DEFINES, iteration_number, \
         eval_input = (eval_input_enc, eval_input_dist, eval_input_time, eval_input_users, eval_input_queue)
         eval_output = (eval_output_dec, eval_output_dist, eval_output_time, eval_output_users, eval_output_queue)
 
-        classifier.train(input_fn=lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size), steps=DEFINES.train_steps)
+        classifier.train(
+            input_fn = lambda: train_input_fn(train_input, train_output, train_target_dec, train_target_queue, DEFINES.batch_size),
+            steps=DEFINES.train_steps
+            )
 
-        eval_result = classifier.evaluate(input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),steps=1)
+        eval_result = classifier.evaluate(
+            input_fn=lambda: eval_input_fn(eval_input, eval_output, eval_target_dec, eval_target_queue, DEFINES.batch_size),
+            steps=1
+        )
         print("\nLINE_1198 eval_result : \n", eval_result)
 
         print("Iterations = ", i + 1)
@@ -1208,15 +1261,13 @@ def training( DEFINES, iteration_number, \
         distance_5, distance_10  = evaluation_distance(prediction_value, eval_input_enc, idx2char, Cordinates)
         print("Iteration = ", i, "  distance = ", distance_5, distance_10)
 
-        pre_5     = pre_5     + float(c_pre_5)
-        pre_10    = pre_10    + float(c_pre_10)
-        f1_5      = f1_5      + float(c_f1_5)
-        f1_10     = f1_10     + float(c_f1_10)
-        recall_5  = recall_5  + float(c_recall_5)
-        recall_10 = recall_10 + float(c_recall_10)
-        ndcg_5    = ndcg_5    + float(c_ndcg_5)
-        ndcg_10   = ndcg_10   + float(c_ndcg_10)
-
+        pre_5     =  pre_5     + float(c_pre_5)
+        pre_10    =  pre_10    + float(c_pre_10)
+        f1_5      =  f1_5      + float(c_f1_5)
+        f1_10     =  f1_10     + float(c_f1_10)
+        recall_5  =  recall_5  + float(c_recall_5)
+        recall_10 =  recall_10 + float(c_recall_10)
+        ndcg_5    =  ndcg_5    + float(c_ndcg_5)
         pop5      += popularity_5
         pop10     += popularity_10
         dis5      += float(distance_5)
@@ -1226,7 +1277,8 @@ def training( DEFINES, iteration_number, \
         # results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, c_recall_5, c_recall_10, c_ndcg_5, c_ndcg_10]
         results.at[results.shape[0]] = [c_pre_5, c_pre_10, c_f1_5, c_f1_10, \
                                         c_recall_5, c_recall_10, c_ndcg_5,  \
-                                        c_ndcg_10, popularity_5, distance_5,\ popularity_10, distance_10, rmse]
+                                        c_ndcg_10, popularity_5, distance_5,\
+                                        popularity_10, distance_10, rmse]
 
     ## normalize
     pre_5      = pre_5      / iteration_number
@@ -1244,9 +1296,9 @@ def training( DEFINES, iteration_number, \
     dis10      = dis10      / iteration_number
     total_rmse = total_rmse / iteration_number
 
-    print("  -> test data total_precison_5 is %f, total_precison_10 is %f"  % (pre_5, pre_10))
-    print("  -> test data total_recall_5 is %f, total_recall_10 is %f"      % (recall_5, recall_10))
-    print("  -> test data total_f1_5 is %f, total_f1_10 is %f"              % (f1_5, f1_10))
+    print("RESULT  -> test data total_precison_5 is %f, total_precison_10 is %f"  % (pre_5, pre_10))
+    print("RESULT  -> test data total_recall_5   is %f, total_recall_10   is %f"  % (recall_5, recall_10))
+    print("RESULT  -> test data total_f1_5       is %f, total_f1_10       is %f"  % (f1_5, f1_10))
     print("  -> test data total_ncdd_5 is %f, total_ndcg_10 is %f"          % (ndcg_5, ndcg_10))
     print("  ==> e test data total pop5 is %f, total pop10 is %f dis5 is %f, total dis 10 is %f" % (pop5, pop10, dis5, dis10))
     print("  ==> average RMSE =  %f" % (total_rmse))
@@ -1275,9 +1327,9 @@ if __name__ == '__main__':
     pre_5, pre_10, f1_5, f1_10, recall_5, recall_10, ndcg_5, ndcg_10, pop5, pop10, dis5, dis10, total_rmse = 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0
 
     results = pd.DataFrame(
-        columns=['pre_5', 'pre_10',       'f1_5', 'f1_10', \
+        columns=['pre_5', 'pre_10',       'f1_5', 'f1_10',     \
                  'recall_5', 'recall_10', 'ndcg_5', 'ndcg_10', \
-                 'pop_5', 'dis_5',        'pop_10', 'dis_10', \
+                 'pop_5', 'dis_5',        'pop_10', 'dis_10',  \
                  'rmse'])
 
 
@@ -1328,6 +1380,7 @@ if __name__ == '__main__':
     # This is the part of creating a training set encoding.
     train_input_enc, train_input_dist,train_input_users, train_input_enc_length = \
         enc_processing(train_input, train_user, char2idx, Cordinates)
+
     print("\nline_1208, train_input_enc, train_input_dist,train_input_users, train_input_enc_length = enc_processing(train_input, train_user, char2idx, Cordinates)")
 
     # print(train_input_enc)
@@ -1339,22 +1392,19 @@ if __name__ == '__main__':
     # print("train time = ", train_input_time)
     # print("train input queue = ", train_input_queue)
 
-
     train_output_dec, train_output_dec_length = dec_output_processing(train_label, char2idx)
-
-    print("==>")
     print("==> train_output_dist = make_output_embedding(train_input_dist)")
+
     train_output_dist = make_output_embedding(train_input_dist)
-    print("==>")
     print("==> train_output_time = make_output_embedding(train_input_time)")
+
     train_output_time = make_output_embedding(train_input_time)
-    print("==>")
     print("==> strain_output_time = make_output_embedding(train_input_time)")
+
     train_output_queue = make_output_embedding(train_input_queue)
-    print("==>")
     print("==> train_output_queue = make_output_embedding(train_input_queue)")
+
     train_output_users = make_output_embedding(train_input_users)
-    print("==>")
     print("==> train_output_users = make_output_embedding(train_input_users)")
 
 
@@ -1375,15 +1425,19 @@ if __name__ == '__main__':
 
     print("======> dec_output_processing(eval_label, char2idx))")
     eval_output_dec, eval_output_dec_length = dec_output_processing(eval_label, char2idx)
+
     print("======> make_output_embedding(eval_input_dist)")
     eval_output_dist = make_output_embedding(eval_input_dist)
+
     print("======> make_output_embedding(eval_input_time)")
     eval_output_time = make_output_embedding(eval_input_time)
+
     print("======> make_output_embedding(eval_input_queue)")
     eval_output_queue = make_output_embedding(eval_input_queue)
 
     print("======> make_output_embedding(eval_input_users)")
     eval_output_users = make_output_embedding(eval_input_users)
+
     print("======> dec_target_processing(eval_label, char2idx)")
     eval_target_dec = dec_target_processing(eval_label, char2idx)
 
@@ -1392,6 +1446,7 @@ if __name__ == '__main__':
 
     user_length = max(max([max(y) for y in eval_input_users]), max([max(y) for y in train_input_users]))+1
     # Find max queue time and normalize based on 0-1
+
     max_queue = max(max([max(y) for y in train_input_queue]), max([max(y) for y in eval_input_queue]))
     # print(max_queue)
 
